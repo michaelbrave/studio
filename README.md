@@ -190,6 +190,7 @@ network or Tailscale, never on the open internet.
 | `STUDIO_HOST` | `127.0.0.1` | hub bind address |
 | `STUDIO_HOME` | `~/.config/studio` | hub data (see below) |
 | `T3_PORT` | `3773` | port for the local T3 that `studio` starts |
+| `T3_HOST` | `127.0.0.1` | interface for that T3; `0.0.0.0` lets another hub use this machine as a worker (also `t3Host` in `settings.json`) |
 
 Everything Studio knows lives in `STUDIO_HOME`: `hub.db` (jobs, attempts, approvals, ratings),
 `workers/` (each worker's sign-in), `vault/` (the markdown memory), `settings.json` (written by

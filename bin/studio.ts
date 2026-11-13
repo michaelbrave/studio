@@ -22,6 +22,8 @@ const NODE_MIN = "22.18.0";
 const T3_PIN = readFileSync(join(STUDIO_DIR, "T3_VERSION"), "utf8").trim();
 const TASK = "Studio"; // Windows scheduled task
 const RUN_FILE = join(STATE_DIR, "run.json");
+const T3_HOST = process.env.T3_HOST ?? (await readSettings(STUDIO_HOME)).t3Host ?? "127.0.0.1";
+const OLD_WORKER_TASK = "T3 for Studio"; // deploy/windows-worker.ps1
 
 // T3's installer puts `t3` in ~/.local/bin, which isn't on every PATH.
 const LOCAL_BIN = join(homedir(), ".local", "bin");
@@ -210,7 +212,7 @@ async function run(flags: string[]) {
     say(`Starting T3 on ${T3_URL} ${dim(`(log: ${log})`)}`);
     const fd = openSync(log, "a");
     children.push(
-      spawn(t3(), ["serve", "--host", "127.0.0.1", "--port", String(T3_PORT), "--no-browser"], {
+      spawn(t3(), ["serve", "--host", T3_HOST, "--port", String(T3_PORT), "--no-browser"], {
         cwd: homedir(),
         stdio: ["ignore", fd, fd],
         windowsHide: true,
@@ -318,8 +320,10 @@ const UNIT_DIR = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
 
 function units(): string[] {
   const u = ["studio-t3.service", "studio-hub.service"];
-  // Hermes installs its own unit; Studio only switches it on and off with the rest (docs/discord.md).
-  if (existsSync(join(UNIT_DIR, "hermes-gateway.service"))) u.push("hermes-gateway.service");
+  // Hermes installs its own unit (docs/discord.md). Once you've enabled it, Studio switches it on
+  // and off with the rest; until then (no Discord bot yet) Studio leaves it alone.
+  const hermes = "hermes-gateway.service";
+  if (existsSync(join(UNIT_DIR, hermes)) && spawnSync("systemctl", ["--user", "is-enabled", "--quiet", hermes]).status === 0) u.push(hermes);
   return u;
 }
 
@@ -342,13 +346,13 @@ function writeUnits() {
     join(UNIT_DIR, "studio-t3.service"),
     `${header}
 [Unit]
-Description=T3 Code server for Studio (local worker, 127.0.0.1:${T3_PORT})
+Description=T3 Code server for Studio (local worker, ${T3_HOST}:${T3_PORT})
 After=network-online.target
 
 [Service]
 WorkingDirectory=%h
 Environment=PATH=${process.env.PATH}
-ExecStart=${t3bin} serve --host 127.0.0.1 --port ${T3_PORT} --no-browser
+ExecStart=${t3bin} serve --host ${T3_HOST} --port ${T3_PORT} --no-browser
 Restart=on-failure
 RestartSec=5
 
@@ -434,6 +438,14 @@ async function winService(sub: string) {
     case "on": {
       needDeps();
       t3();
+      // A worker set up with deploy/windows-worker.ps1 already starts T3 at login, open to the
+      // network for another hub. Two login tasks would race for the port, so Studio's task takes
+      // over: it starts T3 the same way (on every interface) and the old task goes.
+      if (spawnSync("schtasks", ["/Query", "/TN", OLD_WORKER_TASK], { stdio: "ignore" }).status === 0) {
+        writeSettings({ ...(await readSettings(STUDIO_HOME)), t3Host: "0.0.0.0" });
+        ps(`Unregister-ScheduledTask -TaskName '${OLD_WORKER_TASK}' -Confirm:$false`);
+        say(`Replaced the '${OLD_WORKER_TASK}' task: Studio now starts T3 at login, still reachable from your other hub.`);
+      }
       const cmd = `& '${process.execPath}' '${join(STUDIO_DIR, "bin", "studio.ts")}' --background`;
       const code = ps(`
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -WindowStyle Hidden -Command "${cmd.replace(/'/g, "''")}"' -WorkingDirectory $HOME

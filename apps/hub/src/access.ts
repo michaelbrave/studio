@@ -23,6 +23,9 @@ export interface HubSettings {
   host?: string;
   /** Extra Host names allowed from loopback, e.g. a Tailscale Serve name. */
   allowedHosts?: string[];
+  /** Interface the local T3 listens on when `studio` starts it. "0.0.0.0" lets another Studio hub
+   *  use this machine as a worker too (it still needs a pairing code). */
+  t3Host?: string;
 }
 
 export async function readSettings(home: string): Promise<HubSettings> {
