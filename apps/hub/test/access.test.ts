@@ -5,10 +5,10 @@ import { checkAccess } from "../src/access.ts";
 
 const KEY = "s3cret-key";
 
-function req(opts: { from: string; host: string; method?: string; origin?: string; cookie?: string }): IncomingMessage {
+function req(opts: { from: string; host: string; method?: string; origin?: string; cookie?: string; authorization?: string }): IncomingMessage {
   return {
     method: opts.method ?? "GET",
-    headers: { host: opts.host, origin: opts.origin, cookie: opts.cookie },
+    headers: { host: opts.host, origin: opts.origin, cookie: opts.cookie, authorization: opts.authorization },
     socket: { remoteAddress: opts.from },
   } as unknown as IncomingMessage;
 }
@@ -36,6 +36,9 @@ test("another computer needs the key once, then the cookie", () => {
 
   assert.deepEqual(checkAccess(req({ ...lan, cookie: `a=b; studio_key=${KEY}` }), at("/api/state"), KEY), { ok: true });
   assert.equal(checkAccess(req({ ...lan, cookie: "studio_key=nope" }), at("/api/state"), KEY).ok, false);
+  // `studio join` on a support machine sends the key as a header
+  assert.deepEqual(checkAccess(req({ ...lan, method: "POST", authorization: `Bearer ${KEY}` }), at("/api/workers"), KEY), { ok: true });
+  assert.equal(checkAccess(req({ ...lan, authorization: "Bearer nope" }), at("/api/state"), KEY).ok, false);
 });
 
 test("cross-site POSTs are refused even from this machine; /mcp is left to its own token", () => {

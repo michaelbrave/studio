@@ -136,51 +136,57 @@ Linux, macOS and Windows.
 | `studio` | start T3 + the hub and open Studio (`--no-browser` to skip the browser) |
 | `studio stop` | stop a Studio that `studio` started (in another terminal, or in the background) |
 | `studio lan` | the link for opening Studio from another computer; `lan on` / `lan off` / `lan new-key` |
+| `studio join <link>` | make this computer support for a main Studio; `studio leave` undoes it |
 | `studio service on` | start Studio at boot (Linux, systemd) or at login (Windows, a scheduled task); `off` undoes it |
 | `studio service status` | also `start`, `stop`, `restart`, `logs` |
-| `studio pair <name> <address> <code>` | add another machine as a worker (or use **Add a worker** in the UI) |
+| `studio pair <name> <address> <code>` | add a T3-only machine as a worker (or use **Add a worker** in the UI) |
 | `studio doctor` | check Node, T3, agent CLIs, ports and paired workers |
 | `studio update` | `git pull`, reinstall packages, restart services |
 | `studio open` | open the UI |
 | `studio test` | tests + type check |
 
-### Using Studio from another computer
+### More than one computer
 
-By default the hub only accepts the machine it runs on. To open it from, say, the Windows PC
-across the room:
+Studio runs one hub. It holds the jobs, the vault and the worker sign-ins, so they all live in one
+place. The machine that runs it is the **main**. Every other computer is **support**: it runs
+only T3, so the main can send it work, and typing `studio` there opens the main's dashboard. You
+use the same Studio from whichever computer you're sitting at.
 
-```sh
-studio lan on      # on the machine that runs Studio
-```
-
-It prints a link such as `http://192.168.1.10:4600/?key=…`. Open it once in the other computer's
-browser. The hub swaps the key for a cookie, and after that plain `http://192.168.1.10:4600`
-works in that browser.
-
-The key matters: Studio's page can start agents and approve their commands, so anyone with the
-link can run code on your machines. Treat it like a password. `studio lan new-key` replaces it,
-and `studio lan off` closes the hub to the network again. It's plain HTTP, so use it on your home
-network or Tailscale, and never forward the port to the internet. Even on the hub machine itself,
-the hub refuses requests that a web page from another site sends to it.
-
-### Adding another machine
-
-Workers only need T3 and an agent CLI. They don't need Studio.
+**On the main** (once):
 
 ```sh
-# on the other machine (Linux/macOS)
-curl -fsSL https://t3.codes/install.sh | T3CODE_VERSION=0.1.3 sh
-t3 serve --host 0.0.0.0 --port 3773      # prints a pairing code
-
-# on the hub machine
-studio pair desktop 192.168.1.20:3773 <code>
+studio lan on          # let the other computers in; prints a link with an access key
+studio service on      # optional: start at boot
 ```
 
-On **Windows**, install T3 (`irm https://t3.codes/install.ps1 | iex`), then run
-[`deploy/windows-worker.ps1`](deploy/windows-worker.ps1) once to start T3 at every login.
+**On each support computer** (once), after installing:
 
-`--host 0.0.0.0` makes T3 reachable from your network. Allow port 3773 only on your private
-network or Tailscale, never on the open internet.
+```sh
+studio join "http://192.168.1.10:4600/?key=…"     # the link `studio lan` printed on the main
+```
+
+`join` does the rest. It keeps this computer's T3 running at boot/login, open to your network,
+and adds the computer to the main as a worker named after its hostname (`--name` to choose).
+There's no pairing code to copy. It's safe to run again. If the computer already ran a hub of its
+own, that hub stops, but its data stays put, and `studio leave` turns it back into a main.
+
+From then on, `studio` on a support computer just opens the main's dashboard. If the main is off,
+it says so; nothing else tries to take over, so there's never a second hub fighting for the port.
+
+**About the key:** Studio can start agents and approve their commands, so anyone with the link
+can run code on your machines. Treat it like a password. `studio lan new-key` replaces it, and
+`studio lan off` closes the main to the network again. It's plain HTTP, so use it on your home
+network or Tailscale, and never forward the port to the internet. Even on the main itself, the hub
+refuses requests that a web page from another site sends to it.
+
+A browser on any other computer (a tablet, a friend's laptop, no Studio installed) can open the
+link as well. The hub swaps the key for a cookie, so you only open the link once per browser.
+
+**Workers without Studio.** A machine can also be just a T3 worker. Install T3, run
+`t3 serve --host 0.0.0.0 --port 3773` (it prints a pairing code), and on the main run
+`studio pair <name> <address>:3773 <code>`, or use **Add a worker** in the UI. On Windows,
+[`deploy/windows-worker.ps1`](deploy/windows-worker.ps1) starts that T3 at every login. Installing
+Studio there later and running `studio join` replaces that task.
 
 ### Settings
 

@@ -5,7 +5,8 @@
 //   web page from reaching the hub through DNS rebinding.
 // - Another computer (only when the hub listens beyond loopback: `studio lan on`): it needs the
 //   access key, once, in the link `studio lan` prints (`/?key=...`). The hub swaps it for an
-//   HttpOnly cookie and drops it from the address bar.
+//   HttpOnly cookie and drops it from the address bar. Programs (`studio join` on another
+//   machine) send it as `Authorization: Bearer <key>` instead.
 // - Any browser POST whose Origin isn't the hub itself is refused (cross-site requests).
 // - /mcp has its own bearer token (mcp.ts), so it's left to that check.
 
@@ -26,6 +27,10 @@ export interface HubSettings {
   /** Interface the local T3 listens on when `studio` starts it. "0.0.0.0" lets another Studio hub
    *  use this machine as a worker too (it still needs a pairing code). */
   t3Host?: string;
+  /** Set by `studio join` on a support machine: the main Studio this machine works for, and its key.
+   *  A support machine runs only T3; `studio` there opens the main's dashboard. */
+  main?: string;
+  mainKey?: string;
 }
 
 export async function readSettings(home: string): Promise<HubSettings> {
@@ -95,6 +100,8 @@ export function checkAccess(req: IncomingMessage, url: URL, key: string, allowed
 
   const cookie = cookieValue(req.headers.cookie);
   if (cookie !== undefined && same(cookie, key)) return { ok: true };
+  const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? "")?.[1];
+  if (bearer !== undefined && same(bearer, key)) return { ok: true };
 
   const given = url.searchParams.get("key");
   if (given !== null && same(given, key)) {
