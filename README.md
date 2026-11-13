@@ -263,3 +263,8 @@ Built on [T3 Code](https://github.com/pingdotgg/t3code) (MIT). 3D office:
 [three.js](https://threejs.org) (MIT, vendored). Furniture and characters:
 [Kenney](https://kenney.nl) (CC0). Inspired by *Game Dev Tycoon*. Studio borrows its feel, not
 its art or code.
+
+## License
+
+[MIT](LICENSE). Bundled third-party files keep their own licenses: three.js (MIT), Kenney art
+(CC0) and LobeHub Icons (MIT); see `apps/web/vendor/three/LICENSE` and `apps/web/assets/CREDITS.md`.
