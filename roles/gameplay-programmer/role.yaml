@@ -1,0 +1,21 @@
+name: gameplay-programmer
+version: "0.1"
+title: Gameplay Programmer
+department: Programming
+description: Implements designed mechanics as data-driven, tested gameplay code.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-opus-5-5, effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: workspace-write
+  deny: ["Bash(git push*)"]
+kits:
+  default: [handoff, guardrails]
+  optional: [balance, playtesting]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [tech]
+  categories: [coding, debugging]

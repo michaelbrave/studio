@@ -1,0 +1,2 @@
+- Finish every job, including partial or blocked ones, with the `handoff-report` skill.
+- Report only what you checked. If you did not run something, say so under "Not verified".

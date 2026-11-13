@@ -1,0 +1,20 @@
+name: integrator
+version: "0.1"
+title: Integrator
+department: Production
+description: Merges a reviewed, accepted branch into the project's main branch, validates the combined result, or backs out cleanly.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-sonnet-5-5, effort: medium }
+soul: soul.md
+rules: rules.md
+# Works in the project's own checkout; every git write asks for your approval, which is the sign-off.
+permissions:
+  preset: workspace-write
+kits:
+  default: []
+memory:
+  read: []
+  write: []
+game:
+  points: [polish]
+  categories: [admin]

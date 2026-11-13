@@ -1,0 +1,20 @@
+name: producer
+version: "0.1"
+title: Producer
+department: Production
+description: Turns a goal into a plan of task cards, assigning each to the department and role best suited to it.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-opus-5-5, effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: read-only
+kits:
+  default: [handoff, planning]
+  optional: [design-docs]
+memory:
+  read: ["studio/", "projects/{project}/"]
+  write: ["projects/{project}/inbox/"]
+game:
+  points: [design]
+  categories: [planning]

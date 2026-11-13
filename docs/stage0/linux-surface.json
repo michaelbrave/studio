@@ -1,0 +1,4748 @@
+{
+  "worker": "linux",
+  "takenAt": "2026-10-28T04:40:09.353Z",
+  "environment": {
+    "serverVersion": "0.1.3",
+    "platform": {
+      "os": "linux",
+      "arch": "x64"
+    },
+    "preferences": {
+      "newWorktreesStartFromOrigin": true,
+      "enableProviderUpdateChecks": true,
+      "backgroundActivity": {
+        "profile": "balanced"
+      },
+      "sourceControlWritingStyle": {
+        "mode": "repo_conventions",
+        "followChangeRequestTemplates": true,
+        "customInstructions": "",
+        "truncated": false
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "create_threads",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "target": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "providerInstanceId": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "driverKind": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "model": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "options": {
+                          "anyOf": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "boolean"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "value"
+                                    ],
+                                    "additionalProperties": true
+                                  }
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "description": "Options from `orchestrator_capabilities`, such as {effort:'max'}. Given values override inherited. [] or {} clears."
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "runtimeMode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "approval-required",
+                        "auto-accept-edits",
+                        "auto",
+                        "full-access"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "interactionMode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "inherit",
+                        "default",
+                        "plan"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "threads"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "delegate_task",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "providerInstanceId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "driverKind": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "options": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "value"
+                              ],
+                              "additionalProperties": true
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "description": "Options from `orchestrator_capabilities`, such as {effort:'max'}. Given values override inherited. [] or {} clears."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "implementation",
+                  "research",
+                  "review",
+                  "design",
+                  "test",
+                  "general"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isolation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shared",
+                  "worktree"
+                ],
+                "description": "'shared' (default): parent checkout. 'worktree': new prepared checkout from the parent commit, for a separate checkout or PR per child. Uncommitted edits stay out."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "async",
+                  "wait"
+                ],
+                "description": "Default 'async'. 'wait' only if this turn needs the result. A question or approval ends the wait."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mode 'wait' only. Default 10 min. A timeout does not cancel the child."
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtimeMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "inherit",
+                  "approval-required",
+                  "auto-accept-edits",
+                  "auto",
+                  "full-access"
+                ],
+                "description": "Omit unless the user asks for a supervised child. Narrow modes pause for human approval, not read-only. Above yours is rejected."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interactionMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "inherit",
+                  "default",
+                  "plan"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "delete_scheduled_task",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scheduledTaskId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scheduledTaskId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "device_close",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shutdown": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Also turn it off. Default false."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "device_list",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Limit to one device host. Defaults to all hosts."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "device_open",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ios",
+                  "android"
+                ],
+                "description": "Needed with no `deviceId` when both platforms exist."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "device_screenshot",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "hostId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "html_preview",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "html": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512000,
+            "description": "A complete, self-contained HTML document."
+          },
+          "width": {
+            "type": "integer",
+            "description": "CSS pixels, 240 to 1600. Default 728. Use about 390 for phones."
+          },
+          "appearance": {
+            "type": "string",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "description": "Default dark."
+          }
+        },
+        "required": [
+          "html"
+        ]
+      }
+    },
+    {
+      "name": "html_render",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "html": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512000,
+            "description": "A complete, self-contained HTML document."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "height": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Frame height in CSS pixels, 80 to 2000. Use the contentHeight from html_preview."
+          }
+        },
+        "required": [
+          "html",
+          "title",
+          "height"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "link_pull_request",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "With `repository`, when no `url`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "list_scheduled_tasks",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "list_thread_pull_requests",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "orchestrator_capabilities",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "search": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_act",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "click",
+              "type",
+              "hover",
+              "select",
+              "drag",
+              "upload",
+              "press",
+              "scroll"
+            ]
+          },
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "button": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "left",
+                  "right",
+                  "middle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clickCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clear": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modifiers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "Alt",
+                    "Control",
+                    "Meta",
+                    "Shift"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deltaX": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deltaY": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_dialog",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accept": {
+            "type": "boolean"
+          },
+          "promptText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accept"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_evaluate",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expression": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 64000
+          },
+          "awaitPromise": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Default true."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "returnByValue": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "False returns a ref. Default true."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expression"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_navigate",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Website URL. Absolute http(s) URL, or a bare host (https; http for loopback). For public pages."
+          },
+          "target": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "url"
+                        ]
+                      },
+                      "url": {
+                        "type": "string",
+                        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                        "minLength": 1,
+                        "maxLength": 2048,
+                        "description": "Website URL. Absolute http(s) URL, or a bare host (https; http for loopback)."
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "url"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "environment-port"
+                        ]
+                      },
+                      "port": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "exclusiveMaximum": 65536,
+                        "description": "Dev-server port here."
+                      },
+                      "protocol": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "http",
+                              "https"
+                            ],
+                            "description": "Default http."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "path": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "Path, query, and fragment, such as /settings?tab=account."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "port"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "load",
+                  "domContentLoaded",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default 'load'. 'none': return at once."
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60000,
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default 15000."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_open",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First page URL. Absolute http(s) URL, or a bare host (https; http for loopback). Omit to open a blank tab."
+          },
+          "open": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Show the preview to the user. Default true. False for background only."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "show": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Old alias for `open`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reuseExistingTab": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Reuse `tabId`, or your current tab. Default true. False makes a new tab."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Profile id or name from preview_status, for a new tab. Default: the user's. A tab keeps its profile."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_recording_start",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_recording_stop",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_resize",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fill",
+              "freeform",
+              "preset"
+            ]
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "iphone-se",
+                  "iphone-xr",
+                  "iphone-12-pro",
+                  "iphone-14-pro-max",
+                  "pixel-7",
+                  "samsung-galaxy-s8-plus",
+                  "samsung-galaxy-s20-ultra",
+                  "ipad-mini",
+                  "ipad-air",
+                  "ipad-pro",
+                  "surface-pro-7",
+                  "surface-duo",
+                  "galaxy-z-fold-5",
+                  "asus-zenbook-fold",
+                  "samsung-galaxy-a51-71",
+                  "nest-hub",
+                  "nest-hub-max"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 240,
+                "maximum": 3840
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 240,
+                "maximum": 3840
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "portrait",
+                  "landscape"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60000,
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default 15000."
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_set_appearance",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "colorScheme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          }
+        },
+        "required": [
+          "colorScheme"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_snapshot",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "type": "string"
+          },
+          "includeImage": {
+            "type": "boolean",
+            "description": "Default false. True only to see the page."
+          },
+          "save": {
+            "type": "boolean",
+            "description": "Write PNG, return `screenshotPath`."
+          }
+        }
+      }
+    },
+    {
+      "name": "preview_status",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "preview_wait_for",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Case counts."
+          },
+          "urlIncludes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60000,
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default 15000."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "read_pull_request_guide",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "With `repository`, when no `url`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "request_secret",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "secretRef",
+                  "file"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "secretRef (default) for a T3 tool. file for a shell CLI: read the path in your command, e.g. TOKEN=\"$(cat <file>)\" wrangler whoami."
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 3600000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default 10 min."
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retry key for this ask. New key after a timeout or cancel."
+          }
+        },
+        "required": [
+          "label",
+          "reason"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "run_scheduled_task_now",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "taskId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "schedule_task",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "interval"
+                            ]
+                          },
+                          "everyMs": {
+                            "type": "integer",
+                            "maximum": 9007199254740991,
+                            "minimum": 60000,
+                            "description": "Min 60000."
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "everyMs"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "fixed_time"
+                            ]
+                          },
+                          "timeOfDay": {
+                            "type": "string"
+                          },
+                          "weekdays": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 6,
+                                  "description": "Weekday. 0 is Sunday, 6 is Saturday."
+                                },
+                                "description": "Default: every day."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "timeOfDay"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "webhook"
+                            ]
+                          },
+                          "signature": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "encoding": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hex",
+                                          "base64"
+                                        ]
+                                      },
+                                      "prefix": {
+                                        "type": "string",
+                                        "description": "Text before the digest, such as 'sha256='. Empty for none."
+                                      },
+                                      "secret": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Default: stored secret."
+                                      },
+                                      "secretRef": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "From `request_secret`. Instead of `secret`. Spent by this save."
+                                      }
+                                    },
+                                    "required": [
+                                      "header",
+                                      "encoding",
+                                      "prefix"
+                                    ],
+                                    "additionalProperties": true
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Omit for URL token only."
+                          },
+                          "maxDeliveryAgeMinutes": {
+                            "anyOf": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 1440,
+                                    "description": "Skip requests held offline over this many minutes. Omit to run all."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "dedupe": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "replayKey": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "coalesceKey": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "coalesceWindowSeconds": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": 10,
+                                        "maximum": 3600
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "additionalProperties": true,
+                                "description": "Replay and coalesce key templates. Window in seconds, default 120."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "filters": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "op": {
+                                          "type": "string",
+                                          "enum": [
+                                            "equals",
+                                            "notEquals",
+                                            "startsWith"
+                                          ]
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "path",
+                                        "op",
+                                        "value"
+                                      ],
+                                      "additionalProperties": true
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "op": {
+                                          "type": "string",
+                                          "enum": [
+                                            "in"
+                                          ]
+                                        },
+                                        "value": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "description": "Non-empty, without commas or surrounding whitespace."
+                                          },
+                                          "minItems": 1
+                                        }
+                                      },
+                                      "required": [
+                                        "path",
+                                        "op",
+                                        "value"
+                                      ],
+                                      "additionalProperties": true
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "op": {
+                                          "type": "string",
+                                          "enum": [
+                                            "exists"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "path",
+                                        "op"
+                                      ],
+                                      "additionalProperties": true
+                                    }
+                                  ],
+                                  "description": "Path: `headers.x-event` or `body.action`. String compare. Objects pass only 'exists'. A `[]` segment matches any array item. `notEquals` passes only if no item equals."
+                                },
+                                "maxItems": 16,
+                                "description": "All must match. Max 16. Omitted: keep stored. [] clears."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": true,
+                        "description": "Run per webhook request. Prompt can use {{body.path}}, {{headers.name}}, {{query.name}}, {{body}}, {{request}}."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "contentMediaType": "application/json"
+                  }
+                ],
+                "description": "Trigger: {type:'interval',everyMs}, {type:'fixed_time',timeOfDay,weekdays?}, or {type:'webhook'}."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Default true."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bindToCurrentThread": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Default true: runs post in this thread. False: new thread per run."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scheduledTaskId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_attachment_discard",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "attachmentId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachmentId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_attachment_prepare_upload",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "upload": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "image"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "type": "string",
+                    "enum": [
+                      "image/gif",
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp"
+                    ]
+                  },
+                  "sizeBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10485760
+                  }
+                },
+                "required": [
+                  "name",
+                  "mimeType",
+                  "sizeBytes"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "file"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "type": "string"
+                  },
+                  "sizeBytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 52428800
+                  }
+                },
+                "required": [
+                  "type",
+                  "name",
+                  "mimeType",
+                  "sizeBytes"
+                ],
+                "additionalProperties": true
+              }
+            ]
+          }
+        },
+        "required": [
+          "upload"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_background_wait",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "taskIds"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_environment_preferences_update",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "defaultThreadEnvMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "worktree"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "newWorktreesStartFromOrigin": {
+            "type": "boolean"
+          },
+          "enableProviderUpdateChecks": {
+            "type": "boolean"
+          },
+          "backgroundActivity": {
+            "type": "object",
+            "properties": {
+              "profile": {
+                "type": "string",
+                "enum": [
+                  "balanced",
+                  "performance",
+                  "battery-saver"
+                ]
+              }
+            },
+            "required": [
+              "profile"
+            ],
+            "additionalProperties": true
+          },
+          "sourceControlWritingStyle": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "repo_conventions",
+                  "conventional_commits",
+                  "custom"
+                ]
+              },
+              "customInstructions": {
+                "type": "string"
+              },
+              "followChangeRequestTemplates": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_environment_read",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "t3_pending_request",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "read",
+              "respond"
+            ]
+          },
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answers": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_preview_close",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tabId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tabId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_preview_list",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_clone",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remoteUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destinationPath": {
+            "type": "string"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "ssh",
+                  "https"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "destinationPath"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_create",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "workspaceRoot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createWorkspaceRootIfMissing": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaultModelSelection": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "instanceId": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {},
+                      "options": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scripts": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string",
+                      "enum": [
+                        "play",
+                        "test",
+                        "lint",
+                        "configure",
+                        "build",
+                        "debug"
+                      ]
+                    },
+                    "runOnWorktreeCreate": {
+                      "type": "boolean"
+                    },
+                    "runOnSettle": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "async": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "previewUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "autoOpenPreview": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "command",
+                    "icon",
+                    "runOnWorktreeCreate"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_delete",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "force": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_list",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_read",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_project_update",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspaceRoot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaultModelSelection": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "instanceId": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {},
+                      "options": {
+                        "anyOf": [
+                          {},
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "autoPull": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projectIcon": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "lucide"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "color": {
+                            "type": "string",
+                            "enum": [
+                              "gray",
+                              "red",
+                              "orange",
+                              "amber",
+                              "yellow",
+                              "lime",
+                              "green",
+                              "emerald",
+                              "teal",
+                              "cyan",
+                              "sky",
+                              "blue",
+                              "indigo",
+                              "violet",
+                              "purple",
+                              "fuchsia",
+                              "pink",
+                              "rose"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "color"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "emoji"
+                            ]
+                          },
+                          "emoji": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "emoji"
+                        ],
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "monogram"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "color": {
+                            "type": "string",
+                            "enum": [
+                              "gray",
+                              "red",
+                              "orange",
+                              "amber",
+                              "yellow",
+                              "lime",
+                              "green",
+                              "emerald",
+                              "teal",
+                              "cyan",
+                              "sky",
+                              "blue",
+                              "indigo",
+                              "violet",
+                              "purple",
+                              "fuchsia",
+                              "pink",
+                              "rose"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "text",
+                          "color"
+                        ],
+                        "additionalProperties": true
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "faviconPath": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaultThreadEnvMode": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "local",
+                      "worktree"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scripts": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string",
+                      "enum": [
+                        "play",
+                        "test",
+                        "lint",
+                        "configure",
+                        "build",
+                        "debug"
+                      ]
+                    },
+                    "runOnWorktreeCreate": {
+                      "type": "boolean"
+                    },
+                    "runOnSettle": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "async": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "previewUrl": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "autoOpenPreview": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "command",
+                    "icon",
+                    "runOnWorktreeCreate"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "projectId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_queue",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "read",
+              "edit",
+              "cancel",
+              "reorder",
+              "promote_to_steer"
+            ]
+          },
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queuedRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "beforeRunId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetRunId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_configure",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelSelection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "instanceId": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "model": {},
+                  "options": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "model"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_interrupt",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "threadId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_launch",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scratch": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "No project: a new Scratch folder. Not with `projectId` or `workspaceStrategy`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "modelSelection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "instanceId": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "model": {},
+                  "options": {
+                    "anyOf": [
+                      {},
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "model"
+                ],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtimeMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "approval-required",
+                  "auto-accept-edits",
+                  "auto",
+                  "full-access"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interactionMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "plan"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspaceStrategy": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "root"
+                        ]
+                      },
+                      "branch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "existing_worktree"
+                        ]
+                      },
+                      "worktreePath": {
+                        "type": "string"
+                      },
+                      "branch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "worktreePath"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "worktree"
+                        ]
+                      },
+                      "baseRef": {
+                        "type": "string"
+                      },
+                      "branch": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "startFromOrigin": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "baseRef"
+                    ],
+                    "additionalProperties": true
+                  }
+                ],
+                "description": "'worktree': new checkout from `baseRef`. 'existing_worktree': bind `worktreePath`, a project worktree. 'root': project checkout, the default, not your worktree. Stack: parent branch as `baseRef`, `startFromOrigin: false`. Uncommitted edits are not copied."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120000,
+                "description": "First prompt. Omit it and `attachments` for idle."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attachments": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "image"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10485760
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id",
+                        "name",
+                        "mimeType",
+                        "sizeBytes"
+                      ],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "file"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "sizeBytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 52428800
+                        },
+                        "source": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "_tag": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pasted-text"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "_tag"
+                              ],
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id",
+                        "name",
+                        "mimeType",
+                        "sizeBytes"
+                      ],
+                      "additionalProperties": true
+                    }
+                  ]
+                },
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_list",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statuses": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "idle",
+                    "preparing",
+                    "queued",
+                    "starting",
+                    "running",
+                    "waiting",
+                    "completed",
+                    "interrupted",
+                    "failed",
+                    "cancelled",
+                    "rolled_back"
+                  ]
+                },
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "titleContains": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snoozed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "includeSubagents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_organize",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "pin",
+              "unpin",
+              "snooze",
+              "unsnooze",
+              "settle",
+              "unsettle",
+              "archive",
+              "unarchive",
+              "mark_unread"
+            ]
+          },
+          "snoozedUntil": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_read",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "itemId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "textOffset": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "messages",
+                  "activity"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "afterPosition": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max items, 1 to 100."
+          },
+          "runLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max recent runs, 1 to 50."
+          },
+          "maxCharsPerItem": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max chars per item, 1 to 50000."
+          }
+        },
+        "required": [
+          "threadId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "t3_thread_search",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_send",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "queue",
+                  "steer",
+                  "restart"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "threadId",
+          "message"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_send_attachments",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "image"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10485760
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id",
+                    "name",
+                    "mimeType",
+                    "sizeBytes"
+                  ],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "file"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 52428800
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "_tag": {
+                              "type": "string",
+                              "enum": [
+                                "pasted-text"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "_tag"
+                          ],
+                          "additionalProperties": true
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id",
+                    "name",
+                    "mimeType",
+                    "sizeBytes"
+                  ],
+                  "additionalProperties": true
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 8
+          }
+        },
+        "required": [
+          "attachments"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_transfer",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "fork",
+              "merge_back",
+              "status"
+            ]
+          },
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourcePoint": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "latest_stable"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "run"
+                        ]
+                      },
+                      "runId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "runId"
+                    ],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "checkpoint"
+                        ]
+                      },
+                      "checkpointId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "checkpointId"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetThreadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_update",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "rename",
+              "regenerate_title"
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_thread_wait",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timeoutMs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "threadId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_workflow_stop",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "type": "string"
+          },
+          "subagentId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "threadId",
+          "subagentId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_worktree_handoff",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "baseRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startFromOrigin": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "True: fetch, start from the remote ref; check `startedFromOrigin`. Default: server setting."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runSetupScript": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "description": "Default true."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "continuationPrompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "branch"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_worktree_list",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refKind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "local",
+                  "remote"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "includeMatchingRemoteRefs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "t3_worktree_status",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "task_cancel",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "taskId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "task_status",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "taskId"
+        ],
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "unlink_pull_request",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "With `repository`, when no `url`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "unwatch_pull_request",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "With `repository`, when no `url`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "watch_pull_request",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "With `repository`, when no `url`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "write_pull_request_guides",
+      "readOnly": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "repository": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "number": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "description": "With `repository`, when no `url`."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "host": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": true
+            },
+            "minItems": 1,
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "pullRequests"
+        ],
+        "additionalProperties": true
+      }
+    }
+  ]
+}

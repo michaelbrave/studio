@@ -1,0 +1,261 @@
+// The studio simulation (PLAN.md §10): real hub state in, a scene out. Pure: no I/O, no clock of
+// its own, so every rule here is testable. The web view only draws what this decides.
+//
+// Rules from the plan: activity is not progress; unknown, disconnected, waiting and blocked are
+// distinct visible states; nothing is invented when the hub does not know.
+
+export type Pose =
+  | "working" // the agent is running
+  | "waiting" // needs you: an approval or question is pending
+  | "unknown" // the hub cannot confirm what is happening
+  | "break" // stopped by a subscription limit
+  | "done" // result available, waiting for your decision
+  | "failed"
+  | "preparing"
+  | "offline"; // its machine is not reachable
+
+/** What the speech bubble over an agent's head says; the view picks an emoji for each. */
+export type Bubble = "dots" | "exclamation" | "question" | "sleep" | "star" | "cross" | "bars" | "idea" | "hourglass" | "plug" | null;
+
+export interface SceneInput {
+  now: number;
+  workers: Array<{ name: string; online: boolean; error: string | null; local: boolean }>;
+  roles: Array<{ name: string; title: string; department: string }>;
+  kits: Array<{ name: string; title: string; widget: string }>;
+  harnesses: Record<string, { label: string; vendor: string; color: string }>;
+  jobs: Array<{
+    id: string;
+    title: string;
+    kind: string;
+    milestone: string | null;
+    reviews_attempt: string | null;
+    attempts: Array<{
+      id: string;
+      worker: string;
+      state: string;
+      role: string | null;
+      kits: string | null;
+      provider: string | null;
+      model: string | null;
+      verdict: string | null;
+      created_at: number;
+      last_observed_at: number | null;
+    }>;
+  }>;
+  cards: Array<{ id: string; title: string; column: string; role: string; project: string }>;
+  /** Latest activity per running Attempt, if the hub has read it. */
+  activity: Record<string, { kind: string; title: string | null }>;
+}
+
+export interface Agent {
+  attemptId: string;
+  jobId: string;
+  jobTitle: string;
+  floor: string;
+  /** Desk index on the floor; null when the agent is standing somewhere else. */
+  desk: number | null;
+  /** Where a standing agent is: next to another agent's desk, or at the wall board. */
+  visiting: { attemptId: string } | { place: "board" } | null;
+  role: string;
+  roleTitle: string;
+  department: string;
+  harness: { provider: string; label: string; vendor: string; color: string };
+  model: string;
+  kits: Array<{ name: string; title: string; widget: string }>;
+  pose: Pose;
+  bubble: Bubble;
+  /** One line for the hover card. */
+  status: string;
+  /** The agent's latest visible activity while it runs (a tool call or step title), shortened; null when unknown. */
+  doing: string | null;
+  /** Picks skin, hair and face so the same agent always looks the same. */
+  look: number;
+}
+
+export interface Floor {
+  worker: string;
+  online: boolean;
+  local: boolean;
+  error: string | null;
+  desks: number;
+}
+
+export interface Scene {
+  floors: Floor[];
+  agents: Agent[];
+  /** Cards pinned to the wall, by column; `project` is "<worker>/<projectId>". */
+  wall: Record<string, Array<{ id: string; title: string; role: string; project: string }>>;
+  /** Desk assignments to pass back in next time, so agents keep their desks. */
+  seats: Record<string, number>;
+}
+
+/** Finished agents stay at their desks this long so you see the outcome, then go home. */
+export const LINGER_MS = 30 * 60_000;
+export const DESKS_PER_FLOOR = 8;
+const ACTIVE = new Set(["queued", "preparing", "running", "awaiting_input", "capacity_paused", "status_unknown"]);
+
+export function poseFor(state: string, online: boolean): Pose {
+  if (!online && ACTIVE.has(state)) return "offline";
+  switch (state) {
+    case "running":
+      return "working";
+    case "awaiting_input":
+      return "waiting";
+    case "status_unknown":
+      return "unknown";
+    case "capacity_paused":
+      return "break";
+    case "result_available":
+      return "done";
+    case "failed":
+      return "failed";
+    default:
+      return "preparing";
+  }
+}
+
+/** What the agent is visibly doing. Activity picks the working bubble; it never implies progress. */
+export function bubbleFor(pose: Pose, activity?: { kind: string; title: string | null }): Bubble {
+  switch (pose) {
+    case "waiting":
+      return "exclamation";
+    case "unknown":
+      return "question";
+    case "offline":
+      return "plug";
+    case "preparing":
+      return "hourglass";
+    case "break":
+      return "sleep";
+    case "done":
+      return "star";
+    case "failed":
+      return "cross";
+    case "working": {
+      const kind = activity?.kind ?? "";
+      const text = `${activity?.title ?? ""}`.toLowerCase();
+      if (kind === "command_execution" && /\b(test|pytest|jest|vitest|cargo test|go test)\b/.test(text)) return "bars";
+      if (kind === "reasoning" || kind === "plan") return "idea";
+      return "dots";
+    }
+    default:
+      return null;
+  }
+}
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** Whether an Attempt has someone in the office right now. */
+function present(
+  job: SceneInput["jobs"][number],
+  a: SceneInput["jobs"][number]["attempts"][number],
+  now: number,
+): boolean {
+  if (ACTIVE.has(a.state)) return true;
+  // A work result waiting for your accept/reject keeps its agent at the desk until you decide.
+  if (a.state === "result_available" && job.kind === "work" && !job.milestone) return true;
+  const ended = a.last_observed_at ?? a.created_at;
+  return now - ended < LINGER_MS && a.state !== "stopped";
+}
+
+export function buildScene(input: SceneInput, previousSeats: Record<string, number> = {}): Scene {
+  const online = new Map(input.workers.map((w) => [w.name, w.online]));
+  const roles = new Map(input.roles.map((r) => [r.name, r]));
+  const kits = new Map(input.kits.map((k) => [k.name, k]));
+
+  // Only the latest attempt of each job is in the office.
+  const people: Array<{ job: SceneInput["jobs"][number]; a: SceneInput["jobs"][number]["attempts"][number] }> = [];
+  for (const job of input.jobs) {
+    const a = job.attempts.at(-1);
+    if (a && present(job, a, input.now)) people.push({ job, a });
+  }
+  people.sort((x, y) => x.a.created_at - y.a.created_at);
+  const visibleIds = new Set(people.map((p) => p.a.id));
+
+  const agents: Agent[] = [];
+  const seats: Record<string, number> = {};
+  const taken = new Map<string, Set<number>>(); // floor → desks in use
+
+  // Reviewers visit the desk of the work they review while it is in the office; the Producer
+  // works at the wall board. Everyone else sits at a desk.
+  const standing = (job: SceneInput["jobs"][number]): Agent["visiting"] => {
+    if (job.reviews_attempt && visibleIds.has(job.reviews_attempt)) return { attemptId: job.reviews_attempt };
+    if (job.kind === "planning") return { place: "board" };
+    return null;
+  };
+
+  // Keep previous seats first, then fill free desks in arrival order.
+  const order = [
+    ...people.filter((p) => previousSeats[p.a.id] !== undefined),
+    ...people.filter((p) => previousSeats[p.a.id] === undefined),
+  ];
+  for (const { job, a } of order) {
+    const visiting = standing(job);
+    let desk: number | null = null;
+    if (!visiting) {
+      const used = taken.get(a.worker) ?? new Set<number>();
+      const prev = previousSeats[a.id];
+      desk = prev !== undefined && !used.has(prev) ? prev : [...Array(DESKS_PER_FLOOR).keys()].find((d) => !used.has(d)) ?? null;
+      if (desk === null) continue; // a full floor: the extra agent waits off screen
+      used.add(desk);
+      taken.set(a.worker, used);
+      seats[a.id] = desk;
+    }
+    const role = roles.get(a.role ?? "");
+    const harness = input.harnesses[a.provider ?? ""] ?? { label: a.provider ?? "?", vendor: "?", color: "#777777" };
+    const pose = poseFor(a.state, online.get(a.worker) ?? false);
+    const bubble = bubbleFor(pose, input.activity[a.id]);
+    const verdict = a.verdict ? ` · ${a.verdict === "APPROVE" ? "approved" : "changes requested"}` : "";
+    agents.push({
+      attemptId: a.id,
+      jobId: job.id,
+      jobTitle: job.title,
+      floor: a.worker,
+      desk,
+      visiting,
+      role: a.role ?? "",
+      roleTitle: role?.title ?? a.role ?? "Agent",
+      department: role?.department ?? "",
+      harness: { provider: a.provider ?? "", ...harness },
+      model: a.model ?? "default model",
+      kits: (a.kits ? (JSON.parse(a.kits) as string[]) : []).map((k) => kits.get(k) ?? { name: k, title: k, widget: "toolbox" }),
+      pose,
+      bubble,
+      status: STATUS[pose] + verdict,
+      doing: pose === "working" ? doingLine(input.activity[a.id]) : null,
+      look: hash(a.id),
+    });
+  }
+
+  const wall: Scene["wall"] = {};
+  for (const c of input.cards) (wall[c.column] ??= []).push({ id: c.id, title: c.title, role: c.role, project: c.project });
+
+  return {
+    floors: input.workers.map((w) => ({ worker: w.name, online: w.online, local: w.local, error: w.error, desks: DESKS_PER_FLOOR })),
+    agents,
+    wall,
+    seats,
+  };
+}
+
+/** One short line from the latest activity, for the label over an agent's head. */
+export function doingLine(activity?: { kind: string; title: string | null }): string | null {
+  const text = (activity?.title ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+}
+
+const STATUS: Record<Pose, string> = {
+  working: "working",
+  waiting: "needs you",
+  unknown: "status unknown",
+  break: "on a break (usage limit)",
+  done: "done, waiting for your review",
+  failed: "failed",
+  preparing: "getting ready",
+  offline: "machine unreachable",
+};

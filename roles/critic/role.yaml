@@ -1,0 +1,40 @@
+name: critic
+version: "0.3"
+title: Code Critic
+department: Review
+description: Reviews one exact commit against its job brief and reports findings. Never changes the work it reviews.
+runtime: { preferred: codex, fallback: [claude, opencode] }
+model: { effort: high }
+soul: soul.md
+rules: rules.md
+# The critic works in its own disposable worktree of the branch under review, so it may run tests
+# (which write build output) without touching the original. Editing and committing stay blocked.
+permissions:
+  preset: workspace-write
+  allow:
+    - "Bash(git show*)"
+    - "Bash(git diff*)"
+    - "Bash(git log*)"
+    - "Bash(git status*)"
+    - "Bash(git rev-parse*)"
+    - "Bash(git merge-base*)"
+    - "Bash(rg *)"
+    - "Bash(grep *)"
+    - "Bash(ls*)"
+    - "Bash(wc *)"
+    - "Bash(npm test*)"
+    - "Bash(npm run test*)"
+    - "Bash(npm run typecheck*)"
+    - "Bash(node --test*)"
+    - "Bash(pytest*)"
+    - "Bash(cargo test*)"
+    - "Bash(go test*)"
+  deny: ["Edit", "Write", "NotebookEdit", "Bash(git commit*)", "Bash(git push*)", "Bash(git reset*)", "Bash(git checkout*)"]
+kits:
+  default: [handoff, code-review]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [polish]
+  categories: [review]

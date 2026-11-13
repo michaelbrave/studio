@@ -1,0 +1,7 @@
+name: design-docs
+version: "0.1"
+title: Design Docs
+description: Writing game design sections that implementers can build from, and checking scope.
+rules: rules.md
+skills: [design-section, scope-check]
+game: { widget: notebook }

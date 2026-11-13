@@ -1,0 +1,6 @@
+name: code-review
+version: "0.1"
+title: Code Review
+description: A checklist for reviewing one exact commit against its brief.
+skills: [review-checklist]
+game: { widget: magnifier }

@@ -1,0 +1,6 @@
+name: balance
+version: "0.1"
+title: Balance
+description: Checking game numbers (stats, costs, curves, economies) for outliers and broken strategies.
+skills: [balance-check]
+game: { widget: scales }

@@ -1,0 +1,44 @@
+name: guardrails
+version: "0.1"
+title: Guardrails
+description: Lets routine commits, tests and reads run without asking; blocks destructive shell and git commands, and reading secrets files.
+rules: rules.md
+permissions:
+  # Routine work in the job's own worktree runs without asking: committing (the Handoff Kit
+  # requires it), running the tests, and reading. Anything else still asks.
+  allow:
+    - "Bash(git add *)"
+    - "Bash(git commit *)"
+    - "Bash(git status*)"
+    - "Bash(git diff*)"
+    - "Bash(git log*)"
+    - "Bash(git show*)"
+    - "Bash(git rev-parse*)"
+    - "Bash(git ls-files*)"
+    - "Bash(node --test*)"
+    - "Bash(npm test*)"
+    - "Bash(ls*)"
+    - "Bash(cat *)"
+    - "Bash(head *)"
+    - "Bash(tail *)"
+    - "Bash(wc *)"
+    - "Bash(grep *)"
+    - "Bash(sed -n *)"
+    - "Bash(which *)"
+    - "Bash(mkdir -p *)"
+  deny:
+    - "Bash(rm -rf *)"
+    - "Bash(rm -fr *)"
+    - "Bash(rm -r -f *)"
+    - "Bash(rm --recursive --force *)"
+    - "Bash(git push --force*)"
+    - "Bash(git push -f*)"
+    - "Bash(git reset --hard*)"
+    - "Bash(git clean -f*)"
+    - "Bash(git clean -df*)"
+    - "Bash(git clean -xdf*)"
+    - "Bash(sudo *)"
+    - "Bash(chmod 777*)"
+    - "Read(**/.env*)"
+    - "Edit(**/.env*)"
+game: { widget: shield }

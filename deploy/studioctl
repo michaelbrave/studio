@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Kept for old habits and notes: `studioctl X` is now `studio service X` (and `studioctl open`
+# is `studio open`). See bin/studio.
+studio="$(dirname "$(readlink -f "$0")")/../bin/studio"
+case "${1:-status}" in
+  open) exec "$studio" open ;;
+  *) exec "$studio" service "${1:-status}" ;;
+esac

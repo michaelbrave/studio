@@ -1,0 +1,20 @@
+name: qa-lead
+version: "0.1"
+title: QA Lead
+department: QA
+description: Plans and runs testing, writes reproducible bug reports, and says whether a build meets its quality bar.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-sonnet-5-5, effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: workspace-write
+kits:
+  default: [handoff, playtesting, guardrails]
+  optional: [code-review, balance]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [polish]
+  categories: [review, debugging]

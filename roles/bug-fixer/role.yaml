@@ -1,0 +1,21 @@
+name: bug-fixer
+version: "0.1"
+title: Bug Fixer
+department: Programming
+description: Reproduces a reported bug with a failing test, finds the root cause, and makes the smallest fix.
+runtime: { preferred: codex, fallback: [claude, opencode] }
+model: { effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: workspace-write
+  deny: ["Bash(git push*)"]
+kits:
+  default: [handoff, guardrails]
+  optional: [code-review, playtesting]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [tech]
+  categories: [debugging]

@@ -1,0 +1,20 @@
+name: game-designer
+version: "0.1"
+title: Game Designer
+department: Design
+description: Designs mechanics and systems (loops, rules, progression, tuning) as specs that programmers and testers can work from.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-opus-5-5, effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: workspace-write
+kits:
+  default: [handoff, design-docs, guardrails]
+  optional: [balance, playtesting]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [design]
+  categories: [design, writing]

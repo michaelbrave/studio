@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Studio</title>
+<link rel="stylesheet" href="/style.css" />
+<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js" } }</script>
+</head>
+<body>
+<header>
+  <h1>Studio</h1>
+  <span id="status" class="muted"></span>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Workers</h2>
+      <ul id="workers" class="list"></ul>
+      <details>
+        <summary>Add a worker</summary>
+        <form id="pair-form" class="stack">
+          <input name="name" placeholder="name, e.g. desktop" required pattern="[a-z0-9][a-z0-9-]*" />
+          <input name="url" placeholder="address, e.g. 192.168.1.50:3773" required />
+          <input name="code" placeholder="pairing code (t3 auth pairing create)" required />
+          <button>Pair</button>
+        </form>
+      </details>
+    </section>
+
+    <section>
+      <h2>Projects</h2>
+      <ul id="projects" class="list"></ul>
+      <details>
+        <summary>New project</summary>
+        <form id="project-form" class="stack">
+          <select name="worker" required></select>
+          <input name="title" placeholder="title" required />
+          <input name="workspaceRoot" placeholder="folder (optional: blank makes a new repo)" />
+          <button>Create</button>
+        </form>
+      </details>
+    </section>
+  </aside>
+
+  <section id="center">
+    <div id="inbox" class="card inbox" hidden>
+      <h2>Needs you</h2>
+      <div id="inbox-items"></div>
+    </div>
+
+    <nav class="tabs">
+      <button type="button" data-view="office" class="tab active">Studio</button>
+      <button type="button" data-view="board" class="tab">Board</button>
+      <button type="button" data-view="jobs" class="tab">Jobs</button>
+    </nav>
+
+    <div id="view-office" class="view office">
+      <canvas id="office-canvas" hidden></canvas>
+      <div id="office-tooltip" class="office-tooltip" hidden></div>
+    </div>
+
+    <div id="view-board" class="view" hidden>
+      <div class="board-tools">
+        <details>
+          <summary>Ask the Producer to plan</summary>
+          <form id="plan-form" class="card stack">
+            <label>Project <select name="project" required></select></label>
+            <textarea name="goal" rows="3" placeholder="Goal, e.g. &quot;Add a double jump that feels good, with tests&quot;" required></textarea>
+            <button>Plan it</button>
+            <p class="muted">The Producer reads the project and proposes cards, each assigned to a role. You approve them before anything starts.</p>
+          </form>
+        </details>
+        <details>
+          <summary>New card</summary>
+          <form id="card-form" class="card stack">
+            <div class="row">
+              <label>Project <select name="project" required></select></label>
+              <label>Role <select name="role" required></select></label>
+              <label>Priority <select name="priority"><option value="normal">normal</option><option value="high">high</option><option value="low">low</option></select></label>
+            </div>
+            <input name="title" placeholder="Card title" required />
+            <textarea name="body" rows="4" placeholder="What to do, and acceptance criteria"></textarea>
+            <button>Add to backlog</button>
+          </form>
+        </details>
+      </div>
+      <div id="board" class="board"></div>
+    </div>
+
+    <div id="view-jobs" class="view" hidden>
+    <form id="job-form" class="card stack">
+      <h2>New job</h2>
+      <div class="job-grid">
+        <div class="stack">
+          <div class="row">
+            <label>Project <select name="project" required></select></label>
+            <label>Role <select name="role" required></select></label>
+            <label>Runtime <select name="provider" required></select></label>
+          </div>
+          <fieldset id="kit-picker" class="kit-picker">
+            <legend>Kits</legend>
+          </fieldset>
+          <input name="title" placeholder="Job title" required />
+          <textarea name="brief" rows="5" placeholder="Brief: what to do, and how we'll know it's done (acceptance criteria)" required></textarea>
+          <label class="check"><input type="checkbox" name="autoReview" checked /> Cross-check when done (a Code Critic reviews the result, on the other harness when possible)</label>
+          <button>Start job</button>
+        </div>
+        <div class="stack">
+          <div id="agent-preview"></div>
+          <ul id="loadout-notes" class="notes"></ul>
+        </div>
+      </div>
+    </form>
+
+    <h2>Jobs</h2>
+    <div id="jobs"></div>
+    </div>
+  </section>
+
+  <section id="detail" hidden>
+    <div class="detail-head">
+      <h2 id="detail-title"></h2>
+      <button id="close-detail" class="ghost" title="Close">✕</button>
+    </div>
+    <div id="detail-agent"></div>
+    <div id="detail-meta" class="muted"></div>
+    <div id="milestone"></div>
+    <div id="requests"></div>
+    <div id="rating"></div>
+    <button id="cancel" class="danger">Cancel attempt</button>
+    <h3>State history</h3>
+    <ol id="history" class="history"></ol>
+    <h3>Agent activity</h3>
+    <div id="activity" class="activity"></div>
+  </section>
+</main>
+
+<div id="toast" hidden></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

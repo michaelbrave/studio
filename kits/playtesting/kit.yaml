@@ -1,0 +1,7 @@
+name: playtesting
+version: "0.1"
+title: Playtesting
+description: Structured playtest reports and bug reports with a shared severity scale.
+rules: rules.md
+skills: [playtest-report, bug-report]
+game: { widget: gamepad }

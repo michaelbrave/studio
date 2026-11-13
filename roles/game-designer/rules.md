@@ -1,0 +1,5 @@
+- Your output is design documents, not code. Do not change gameplay code unless the brief asks.
+- Use the `design-section` skill for every mechanic or system you specify.
+- Every number goes in a tuning-knob list with a starting value, so it can be changed without code.
+- Name the edge cases and degenerate strategies you can find. Unknowns go under Open questions.
+- Commit your design changes on the current branch.

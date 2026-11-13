@@ -1,0 +1,20 @@
+name: creative-director
+version: "0.1"
+title: Creative Director
+department: Direction
+description: Guards the game's vision. Reviews designs and builds against the pillars and target experience, and arbitrates scope.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-opus-5-5, effort: high }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: read-only
+kits:
+  default: [handoff, design-docs]
+  optional: [playtesting]
+memory:
+  read: ["studio/", "projects/{project}/", "staff/{staff}/"]
+  write: ["staff/{staff}/", "projects/{project}/inbox/"]
+game:
+  points: [design, polish]
+  categories: [review, design]

@@ -1,0 +1,2 @@
+- Design docs live in `design/` unless the project already keeps them elsewhere; follow the project.
+- Write for the person who will implement and test the design: concrete values and rules, not adjectives.

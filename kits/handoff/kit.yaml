@@ -1,0 +1,7 @@
+name: handoff
+version: "0.1"
+title: Handoff
+description: The end-of-job report Studio reads to review your work.
+rules: rules.md
+skills: [handoff-report]
+game: { widget: clipboard }

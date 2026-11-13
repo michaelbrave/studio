@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Launcher for `studio` on Linux and macOS: find a Node new enough for Studio, then run
+# bin/studio.ts (where everything else lives). On Windows, bin/studio.cmd does the same.
+set -euo pipefail
+dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# A Node that install.sh downloaded for Studio comes first, so a too-old system Node can't win.
+if [ -x "$HOME/.local/share/studio/node/bin/node" ]; then PATH="$HOME/.local/share/studio/node/bin:$PATH"; fi
+command -v node >/dev/null || { echo "studio: Node isn't installed. Run $dir/../install.sh" >&2; exit 1; }
+exec node --disable-warning=ExperimentalWarning "$dir/studio.ts" "$@"

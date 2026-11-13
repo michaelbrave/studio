@@ -1,0 +1,6 @@
+name: planning
+version: "0.1"
+title: Planning
+description: Breaking a goal into kanban cards, each assigned to a role, with testable acceptance criteria.
+skills: [break-down]
+game: { widget: cards }

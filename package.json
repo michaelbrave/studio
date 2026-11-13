@@ -1,0 +1,23 @@
+{
+  "name": "studio",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test --experimental-sqlite \"packages/*/test/*.test.ts\" \"apps/*/test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json",
+    "probe": "node packages/t3-bridge/src/cli.ts",
+    "kit:compile": "node packages/kits/src/cli.ts",
+    "hub": "node --disable-warning=ExperimentalWarning apps/hub/src/server.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.9"
+  }
+}
