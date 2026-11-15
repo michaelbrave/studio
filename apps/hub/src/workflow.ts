@@ -7,12 +7,13 @@ import { Board, type Card, type Column } from "./board.ts";
 import { TERMINAL_STATES, type Attempt, type Job } from "./db.ts";
 import { parseCards, type Handoff } from "./handoff.ts";
 import { HARNESSES, INSTANCE, type Hub } from "./hub.ts";
+import { listProjects } from "./t3Worker.ts";
 import { slug, type Vault } from "./vault.ts";
 
 const MAX_NOTES_IN_BRIEF = 6;
 const MAX_FEEDBACK_LINES = 8;
 /** Roles the Producer may assign cards to; the others support the loop rather than doing cards. */
-const NOT_ASSIGNABLE = new Set(["critic", "integrator", "producer"]);
+const NOT_ASSIGNABLE = new Set(["critic", "integrator", "producer", "studio-manager"]);
 
 export interface RatingInput {
   category: string;
@@ -152,28 +153,68 @@ export class Workflow {
   }
 
   /** Start a Job from a card: its Role, the Role's default Kits and runtime unless overridden. */
-  async startCard(id: string, opts: { provider?: Provider; kits?: string[]; autoReview?: boolean } = {}) {
+  async startCard(id: string, opts: { provider?: Provider; kits?: string[]; autoReview?: boolean; staff?: string; by?: string } = {}) {
     const card = await this.board.get(id);
     if (!card.role) throw new Error("assign the card to a role first");
     const [worker, ...rest] = card.project.split("/");
     const project = rest.join("/");
     const role = (await this.hub.catalog()).roles.find((r) => r.name === card.role);
     if (!role) throw new Error(`unknown role ${card.role}`);
+    // The staff member asked for, or else one hired into this role with no job on, takes the card
+    // unless you chose a one-off setup.
+    const member = opts.staff
+      ? await this.hub.staff?.get(opts.staff)
+      : opts.provider || opts.kits
+        ? undefined
+        : ((await this.hub.freeStaff(card.role)) ?? undefined);
     return this.hub.startJob({
       worker: worker!,
       project,
       title: card.title,
       brief: `${card.title}\n\n${card.body}`.trim(),
       role: card.role,
-      provider: opts.provider ?? (role.preferred as Provider),
+      ...(member ? { staff: member.name } : {}),
+      provider: opts.provider ?? member?.runtime ?? (role.preferred as Provider),
       ...(opts.kits ? { kits: opts.kits } : {}),
       ...(opts.autoReview === false ? { autoReview: false } : {}),
+      ...(opts.by ? { by: opts.by } : {}),
       card: id,
     });
   }
 
+  /**
+   * Work that is still open (on the go, failed, or waiting for your review) but has no card gets
+   * one, so the Board shows it. Covers jobs started before every job got a card. Finished and
+   * decided work is left alone.
+   */
+  private async backfillCards() {
+    const onBoard = new Set((await this.board.list()).flatMap((c) => c.jobs));
+    const open = this.hub.db
+      .prepare(
+        `SELECT j.*, a.role AS a_role, a.worker AS a_worker FROM jobs j JOIN attempts a ON a.job_id = j.id
+         WHERE j.kind = 'work' AND j.reviews_attempt IS NULL AND j.milestone IS NULL
+           AND a.created_at = (SELECT MAX(created_at) FROM attempts b WHERE b.job_id = j.id)
+           AND a.state != 'stopped'`,
+      )
+      .all() as unknown as Array<Job & { a_role: string | null; a_worker: string }>;
+    for (const j of open) {
+      if (onBoard.has(j.id)) continue;
+      await this.board.create({
+        title: j.title,
+        project: `${j.a_worker}/${j.project}`,
+        role: j.a_role ?? "",
+        priority: "normal",
+        column: "doing",
+        createdBy: "studio (from an existing job)",
+        body: j.brief,
+        jobs: [j.id],
+      });
+    }
+  }
+
   /** Keep each card's column in step with its latest work Job. Cards without jobs are yours to move. */
   private async syncBoard() {
+    await this.backfillCards();
     for (const card of await this.board.list()) {
       const jobId = card.jobs.at(-1);
       if (!jobId) continue;
@@ -300,7 +341,7 @@ export class Workflow {
     const base = opts.base ?? branchStatus.branchChanges?.baseRef;
     if (!base) throw new Error("could not tell which branch the job started from");
 
-    const root = (await t3.call<{ projects: Array<{ id: string; workspaceRoot: string }> }>("t3_project_list")).projects.find(
+    const root = (await listProjects<{ id: string; workspaceRoot: string }>(t3)).find(
       (p) => p.id === job.project,
     )?.workspaceRoot;
     if (!root) throw new Error("project not found on the worker");

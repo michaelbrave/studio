@@ -177,3 +177,19 @@ test("reconcile leaves a launch that is still in progress alone", async () => {
   assert.equal(d.get(id).state, "running");
   assert.ok(!d.history(id).some((h) => (h as { to_state: string }).to_state === "status_unknown"));
 });
+
+test("a restarted attempt is watched again, and the run that already failed cannot fail it twice", async () => {
+  const { d, worker, job } = setup();
+  const id = d.createAttempt(job, "desktop");
+  await d.launch(id);
+  worker.finish("thr_1", "failed");
+  assert.equal((await d.reconcile(id)).state, "failed");
+  // The restart message was sent; T3 still reports the old failure at the position we recorded.
+  const seq = worker.threads.get("thr_1")!.seq;
+  d.reopen(id, "restarted by you", seq);
+  assert.equal(d.get(id).state, "running");
+  assert.equal((await d.reconcile(id)).state, "running");
+  // The new run finishes.
+  worker.finish("thr_1", "result_available");
+  assert.equal((await d.reconcile(id)).state, "result_available");
+});

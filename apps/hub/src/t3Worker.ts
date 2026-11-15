@@ -49,6 +49,74 @@ async function waitForWorktree(worker: T3Worker, threadId: string, timeoutMs = 1
   throw new Error(`thread ${threadId} had no worktree after ${timeoutMs / 1000}s`);
 }
 
+export interface TimelineItem {
+  position: number;
+  type: string;
+  text: string | null;
+  title: string | null;
+  status: string;
+  createdBy: string | null;
+  updatedAt: string;
+}
+
+interface ReadPage<T> {
+  thread: T & { itemCount: number };
+  items: TimelineItem[];
+  nextPosition: number | null;
+  hasMore: boolean;
+}
+
+/**
+ * The newest `last` items of a thread's timeline. T3 pages from the start (afterPosition), so a
+ * plain read with a limit returns the OLDEST items: a long chat would stop showing anything new.
+ * This starts near the end, and reaches further back only when the view skipped items there.
+ */
+export async function readTail<T = Record<string, unknown>>(
+  worker: T3Worker,
+  threadId: string,
+  opts: { view: "activity" | "messages"; last: number; maxCharsPerItem: number },
+): Promise<{ thread: T & { itemCount: number }; items: TimelineItem[] }> {
+  const head = await worker.call<ReadPage<T>>("t3_thread_read", { threadId, view: opts.view, limit: 1, maxCharsPerItem: 1 });
+  const total = Number(head.thread?.itemCount);
+  // Without a count (an older T3), read the whole timeline once.
+  let back = Number.isFinite(total) ? opts.last : Infinity;
+  for (;;) {
+    // afterPosition is exclusive; undefined reads from the very start.
+    const after = total - back - 1;
+    const items: TimelineItem[] = [];
+    let thread = head.thread;
+    let pos: number | undefined = after >= 0 ? after : undefined;
+    for (;;) {
+      const page: ReadPage<T> = await worker.call<ReadPage<T>>("t3_thread_read", {
+        threadId,
+        view: opts.view,
+        limit: 100,
+        maxCharsPerItem: opts.maxCharsPerItem,
+        ...(pos === undefined ? {} : { afterPosition: pos }),
+      });
+      thread = page.thread;
+      items.push(...page.items);
+      if (!page.hasMore || page.nextPosition === null || page.nextPosition === pos) break;
+      pos = page.nextPosition;
+    }
+    if (items.length >= opts.last || !(after >= 0)) return { thread, items: items.slice(-opts.last) };
+    back *= 4;
+  }
+}
+
+/** Every project on a worker. t3_project_list returns 20 per page unless asked. */
+export async function listProjects<P = { id: string; title: string; workspaceRoot: string }>(worker: T3Worker): Promise<P[]> {
+  const out: P[] = [];
+  let cursor: number | null = 0;
+  while (cursor !== null) {
+    const page: { projects: P[]; nextCursor: number | null } = await worker.call("t3_project_list", { cursor, limit: 100 });
+    out.push(...page.projects);
+    cursor = page.nextCursor ?? null;
+    if (out.length > 2000) break;
+  }
+  return out;
+}
+
 export interface T3WorkerPortOptions {
   /** Each Attempt gets its own worktree, branched from this ref. */
   baseRef?: string;

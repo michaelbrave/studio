@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { KitValidationError, parseKitManifest, parseRoleManifest, type KitManifest, type RoleManifest } from "./schema.ts";
@@ -102,15 +102,22 @@ export async function loadKit(dir: string): Promise<LoadedKit> {
  * Role lists. Two Kits may not provide the same skill or MCP server name: the agent would see
  * only one of them, so that is an error rather than a silent override.
  */
-export async function loadLoadout(opts: { rolesDir: string; kitsDir: string; role: string; kits?: string[] }): Promise<Loadout> {
-  const role = await loadRole(join(opts.rolesDir, opts.role));
+export async function loadLoadout(opts: {
+  rolesDir: string | string[];
+  kitsDir: string | string[];
+  role: string;
+  kits?: string[];
+  /** Equip `kits` even if the Role does not list them: a hired staff member's own choice of tools. */
+  anyKits?: boolean;
+}): Promise<Loadout> {
+  const role = await loadRole(await findDir(opts.rolesDir, opts.role, "role"));
   const { default: defaults, optional } = role.manifest.kits;
   const names = [...new Set(opts.kits ?? defaults)];
-  const notAllowed = names.filter((k) => !defaults.includes(k) && !optional.includes(k));
+  const notAllowed = opts.anyKits ? [] : names.filter((k) => !defaults.includes(k) && !optional.includes(k));
   if (notAllowed.length > 0) {
     throw new KitValidationError([`role ${role.manifest.name} cannot equip: ${notAllowed.join(", ")}`]);
   }
-  const kits = await Promise.all(names.map((k) => loadKit(join(opts.kitsDir, k))));
+  const kits = await Promise.all(names.map(async (k) => loadKit(await findDir(opts.kitsDir, k, "kit"))));
 
   const issues: string[] = [];
   const skills = new Map<string, Map<string, string>>();
@@ -144,4 +151,19 @@ export async function loadLoadout(opts: { rolesDir: string; kitsDir: string; rol
     },
     snapshot: sha(JSON.stringify([role.hash, ...kits.map((k) => [k.manifest.name, k.hash])])),
   };
+}
+
+/**
+ * Roles and Kits can live in more than one folder: the built-in ones in the repo, and the ones you
+ * make in Studio (under STUDIO_HOME). The first folder that has `name` wins.
+ */
+export async function findDir(dirs: string | string[], name: string, what = "folder"): Promise<string> {
+  const list = typeof dirs === "string" ? [dirs] : dirs;
+  for (const dir of list) {
+    const path = join(dir, name);
+    if (await access(path).then(() => true, () => false)) return path;
+  }
+  // Keep the old error shape (a missing manifest) when there is only one place to look.
+  if (list.length === 1) return join(list[0]!, name);
+  throw new KitValidationError([`no ${what} named ${name}`]);
 }

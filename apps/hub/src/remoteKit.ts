@@ -27,6 +27,7 @@ export async function deliverKitRemote(input: {
   loadout: Loadout;
   provider: Provider;
   memoryBrief?: string;
+  staff?: { name: string; soulOverride?: string };
 }): Promise<CompileResult> {
   const { rpc, worktree, loadout, provider, memoryBrief } = input;
 
@@ -37,7 +38,7 @@ export async function deliverKitRemote(input: {
     const content = await readRemote(rpc, worktree, path);
     if (content !== undefined) existing.set(path, { tracked: true, content });
   }
-  const result = compileLoadout({ loadout, provider, existing: (p) => existing.get(p), ...(memoryBrief ? { memoryBrief } : {}) });
+  const result = compileLoadout({ loadout, provider, existing: (p) => existing.get(p), ...(memoryBrief ? { memoryBrief } : {}), ...(input.staff ? { staff: input.staff } : {}) });
   if (!result.launchable) {
     const blocked = result.report.filter((r) => r.status === "unsupported").map((r) => `${r.feature}: ${r.reason}`);
     throw new Error(`${loadout.role.manifest.name} is not launchable on ${provider}: ${blocked.join("; ")}`);

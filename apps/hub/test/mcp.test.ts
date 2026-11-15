@@ -28,7 +28,7 @@ function body(req: IncomingMessage): Promise<unknown> {
 }
 
 test("Hermes can read what is waiting and answer it; others can't get in", async () => {
-  const server = createServer(async (req, res) => handleMcp(fakeHub, "tok", req, res, await body(req))).listen(0);
+  const server = createServer(async (req, res) => handleMcp(fakeHub, { hermes: "tok", desk: "desk-tok" }, req, res, await body(req))).listen(0);
   await new Promise((r) => server.once("listening", r));
   const url = new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`);
   try {
@@ -46,6 +46,31 @@ test("Hermes can read what is waiting and answer it; others can't get in", async
     assert.match(waiting.content[0]!.text, /attempt att1, request req1.*\n  \$ npm install three/);
     await client.callTool({ name: "studio_respond", arguments: { attemptId: "att1", requestId: "req1", decision: "accept" } });
     assert.deepEqual(responses, [["att1", "req1", "accept", "from Discord (Hermes)"]]);
+    await client.close();
+  } finally {
+    server.close();
+  }
+});
+
+test("the Studio chat's token can also set Studio up; Hermes' can't", async () => {
+  const hired: unknown[] = [];
+  const hub = { ...fakeHub, hire: async (i: unknown) => (hired.push(i), { displayName: "Ada", name: "ada", role: "engineer", worker: "local" }) } as unknown as Hub;
+  const server = createServer(async (req, res) => handleMcp(hub, { hermes: "tok", desk: "desk-tok" }, req, res, await body(req))).listen(0);
+  await new Promise((r) => server.once("listening", r));
+  const url = new URL(`http://127.0.0.1:${(server.address() as { port: number }).port}/mcp`);
+  try {
+    const client = new Client({ name: "test", version: "1" });
+    await client.connect(new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: "Bearer desk-tok" } } }));
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    for (const n of ["studio_catalog", "studio_hire", "studio_fire", "studio_start_job", "studio_create_project", "studio_connect_computer", "studio_plan", "studio_status"]) {
+      assert.ok(names.includes(n), n);
+    }
+    const out = (await client.callTool({
+      name: "studio_hire",
+      arguments: { name: "Ada", computer: "local", from: "template", role: "engineer", harness: "claude", soul: "role", kits: ["handoff"] },
+    })) as { content: Array<{ text: string }> };
+    assert.match(out.content[0]!.text, /Hired Ada/);
+    assert.deepEqual((hired[0] as { soul: unknown; worker: string }).soul, { kind: "role" });
     await client.close();
   } finally {
     server.close();

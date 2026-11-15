@@ -104,14 +104,14 @@ export class Dispatcher {
   createAttempt(
     jobId: string,
     worker: string,
-    loadout?: { role: string; kits: string[]; provider: string; model: string | null; snapshot: string },
+    loadout?: { role: string; kits: string[]; provider: string; model: string | null; snapshot: string; staff?: string | null },
   ): string {
     if (!this.workers[worker]) throw new Error(`unknown worker ${worker}`);
     const id = `att_${randomUUID()}`;
     this.db
       .prepare(
-        `INSERT INTO attempts (id, job_id, worker, state, marker, role, kits, provider, model, snapshot, created_at)
-         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO attempts (id, job_id, worker, state, marker, role, kits, provider, model, snapshot, staff, created_at)
+         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -123,6 +123,7 @@ export class Dispatcher {
         loadout?.provider ?? null,
         loadout?.model ?? null,
         loadout?.snapshot ?? null,
+        loadout?.staff ?? null,
         this.now(),
       );
     this.log(id, null, "queued", "created");
@@ -251,6 +252,23 @@ export class Dispatcher {
       await this.worker(a).interrupt(a.thread_id).catch(() => {}); // confirmed later by reconcile
     }
     return this.get(id);
+  }
+
+  /**
+   * Watch a finished Attempt again because it was sent back to work in its own thread (a
+   * restart). Its earlier result, if any, no longer stands. `seq` is the thread's position right
+   * after the restart was sent: only later observations count, so the run that already failed
+   * cannot mark it failed again.
+   */
+  reopen(id: string, reason: string, seq: number) {
+    const a = this.get(id);
+    if (!a.thread_id) throw new Error(`attempt ${id} has no thread to reopen`);
+    this.db
+      .prepare(
+        "UPDATE attempts SET cancel_requested = 0, handoff_read = 0, result_commit = NULL, verdict = NULL, seen_at = NULL, last_seq = MAX(last_seq, ?), last_observed_at = ? WHERE id = ?",
+      )
+      .run(seq, this.now(), id);
+    this.transition(this.get(id), "running", reason);
   }
 
   private bindThread(id: string, threadId: string, reason: string) {

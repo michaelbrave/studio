@@ -241,7 +241,8 @@ function showTooltip(e, hit) {
     d.textContent = text;
     tooltip.append(d);
   };
-  line(a.jobTitle, "tt-title");
+  line(a.name ?? a.jobTitle, "tt-title");
+  if (a.name && a.jobId) line(a.jobTitle);
   line(`${a.roleTitle}${a.department ? ` · ${a.department}` : ""}`);
   line(`${a.harness.label} · ${a.model}`);
   if (a.kits.length) line(`Kits: ${a.kits.map((k) => k.title).join(", ")}`);
@@ -373,7 +374,7 @@ function drawFloor(g, floor, index, width, frame) {
     g.fillStyle = "rgba(60, 40, 20, 0.45)";
     g.font = "600 13px system-ui, sans-serif";
     g.textAlign = "center";
-    g.fillText("No one at work on this floor", c.x, c.y);
+    g.fillText(current.agents.length ? "No one on this floor" : "No staff yet: Hire an agent (left)", c.x, c.y);
     g.textAlign = "left";
   }
 }
@@ -518,7 +519,7 @@ function drawPerson(g, a, cx, base, frame, standing) {
   g.fill();
   g.fillRect(cx - 22, py + 10, 47, 4);
   overlays.push(() => {
-    label(g, a.roleTitle.toUpperCase(), cx, py - 16, { size: 9 });
+    label(g, (a.name ?? a.roleTitle).toUpperCase(), cx, py - 16, { size: 9 });
     // Speech bubble with an emoji for their state. Needs-you pulses so it catches the eye.
     const emoji = BUBBLES[a.bubble];
     if (emoji) speechBubble(g, emoji, cx + 26, py - 22, a.pose === "waiting" && frame % 4 >= 2 ? 1.18 : 1);
@@ -532,3 +533,6 @@ function drawPerson(g, a, cx, base, frame, standing) {
   }
   hitBoxes.push({ attemptId: a.attemptId, ...box });
 }
+
+/** The flat office has no camera to turn; the Staff list still opens the agent's panel. */
+export function focusAgent() {}

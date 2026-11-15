@@ -70,6 +70,10 @@ export interface Attempt {
   handoff_read: number;
   /** Why no cross-check was started for this Attempt, if one was not. */
   review_note: string | null;
+  /** The hired staff member doing this Attempt, if one is (staff.ts). */
+  staff: string | null;
+  /** When you first opened the finished Attempt in Studio; until then it shows as waiting for you. */
+  seen_at: number | null;
   created_at: number;
 }
 
@@ -114,6 +118,8 @@ export function openDb(path = ":memory:"): DatabaseSync {
       verdict TEXT,
       handoff_read INTEGER NOT NULL DEFAULT 0,
       review_note TEXT,
+      staff TEXT,
+      seen_at INTEGER,
       created_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ratings (
@@ -123,6 +129,17 @@ export function openDb(path = ":memory:"): DatabaseSync {
       note TEXT,
       at INTEGER NOT NULL,
       PRIMARY KEY (attempt_id, category)
+    );
+    CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      worker TEXT NOT NULL,
+      project TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      provider TEXT,
+      model TEXT,
+      desk INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS attempt_log (
       attempt_id TEXT NOT NULL REFERENCES attempts(id),
@@ -149,6 +166,8 @@ function migrate(db: DatabaseSync) {
     ["verdict", "TEXT"],
     ["handoff_read", "INTEGER NOT NULL DEFAULT 0"],
     ["review_note", "TEXT"],
+    ["staff", "TEXT"],
+    ["seen_at", "INTEGER"],
   ] as const) {
     if (!columns.has(col)) db.exec(`ALTER TABLE attempts ADD COLUMN ${col} ${def}`);
   }

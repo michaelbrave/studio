@@ -1,0 +1,6 @@
+name: studio-ops
+version: "0.1"
+title: Studio Ops
+description: How to run Studio itself through its MCP tools - staffing work with the people already hired, keeping the Board current, and getting stuck or failed agents going again.
+skills: [staff-the-work, keep-the-board, unstick-agents]
+game: { widget: clipboard }

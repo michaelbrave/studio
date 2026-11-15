@@ -19,6 +19,17 @@ const DESKS = [
 ];
 const BOARD_SPOT = { x: -6.05, z: -1.1, ry: -1.15 };
 const ANIM_FPS = 24;
+/** Height of a desk's top surface, and the size of the Kit widgets standing on it. */
+const DESK_TOP = 0.725;
+const WIDGET_SIZE = 0.17;
+/** The walkway between the two rows of desks, and where free agents like to go. */
+const AISLE_Z = -0.2;
+const SPOTS = {
+  coffee: { path: [[5.3, AISLE_Z], [5.3, -2.85]], face: Math.PI, stay: [6, 12] },
+  lounge: { path: [[-3.95, AISLE_Z], [-3.95, 1.55]], face: -0.8, stay: [8, 16] },
+  window: { path: [[0.7, AISLE_Z], [0.7, -3.25], [3.0, -3.3]], face: Math.PI, stay: [6, 12] },
+};
+const WALK_SPEED = 1.3; // floor units per second
 /** Agents are drawn a little larger than the furniture, toy-style, so hats and shirts read. */
 const AGENT_SCALE = 1.15;
 
@@ -31,6 +42,7 @@ const POSE = {
   failed: { color: "#ef4444", label: "Failed" },
   preparing: { color: "#94a3b8", label: "Getting ready" },
   offline: { color: "#64748b", label: "Machine unreachable" },
+  idle: { color: "#38bdf8", label: "Free for work" },
 };
 const DEPARTMENT_CAPS = { Programming: "#3b4a8b", Design: "#9b3b7e", QA: "#2f8a5f", Direction: "#a4782a", Production: "#6d48a8", Review: "#2a7f8f" };
 const WIDGETS = { clipboard: "📋", shield: "🛡️", magnifier: "🔍", notebook: "📓", scales: "⚖️", gamepad: "🎮", cards: "🗂️", toolbox: "🧰" };
@@ -207,6 +219,14 @@ function firstLogo(keys) {
 let container, stage, renderer, scene3d, camera, controls, hemi, sun, nightLights;
 let hud = {};
 let onSelect = () => {};
+let onHire = null;
+let onChat = null;
+let onRestart = null;
+let t3Url = () => null;
+/** Whether you moved the camera yourself; until then it keeps the room fitted to the frame. */
+let userMoved = false;
+/** "Ada · Software Engineer" for hired staff, the role alone for an agent hired for one job. */
+const who = (a) => (a.name ? `${a.name} · ${a.roleTitle}` : a.roleTitle);
 let current = null;
 let visible = false;
 let raf = null;
@@ -230,6 +250,10 @@ const pointer = new THREE.Vector2();
 export function mountOffice(el, opts) {
   container = el;
   onSelect = opts.onSelect;
+  onHire = opts.onHire ?? null;
+  onChat = opts.onChat ?? null;
+  onRestart = opts.onRestart ?? null;
+  t3Url = opts.t3Url ?? (() => null);
   container.classList.add("office3d");
   stage = esc("div", "o3-stage");
   container.append(stage);
@@ -253,7 +277,10 @@ export function mountOffice(el, opts) {
   controls.maxPolarAngle = 1.3;
   controls.autoRotateSpeed = 0.6;
   controls.addEventListener("change", kick);
-  controls.addEventListener("start", stopTour);
+  controls.addEventListener("start", () => {
+    stopTour();
+    userMoved = true;
+  });
 
   hemi = new THREE.HemisphereLight("#ffffff", "#b8b2a6", 1.6);
   scene3d.add(hemi);
@@ -316,6 +343,8 @@ function resize() {
   camera.top = view / 2;
   camera.bottom = -view / 2;
   camera.updateProjectionMatrix();
+  // Until you move the camera yourself, the room stays fitted to the frame as it resizes.
+  if (!userMoved && !tween && current) resetCamera(true);
   kick();
 }
 
@@ -724,15 +753,16 @@ function buildAgent(a) {
   head.add(rec.patchMesh);
   paintCapPatch(rec);
 
-  // Kit widgets on the desk (shown only while seated).
+  // Kit widgets stand on the agent's desk: they belong to the floor, not to the agent's body, so
+  // they stay put on the desktop whether it sits, stands or walks off for a coffee.
   rec.widgets = new THREE.Group();
-  a.kits.forEach((k, i) => {
+  a.kits.slice(0, 6).forEach((k, i) => {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(WIDGETS[k.widget] ?? WIDGETS.toolbox) }));
-    s.scale.setScalar(0.2);
-    s.position.set(0.3 + i * 0.2, 0.84, 0.95);
+    s.scale.setScalar(WIDGET_SIZE);
+    // Right half of the desktop (the monitor is on the left), two rows of three.
+    s.position.set(0.2 + (i % 3) * 0.19, DESK_TOP + WIDGET_SIZE / 2, 0.04 + Math.floor(i / 3) * 0.2);
     rec.widgets.add(s);
   });
-  root.add(rec.widgets);
 
   // Status bubble.
   rec.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true }));
@@ -860,6 +890,15 @@ function bubbleTexture(bubble, pose) {
 
 function placeAgent(rec) {
   const a = rec.data;
+  // The widgets stay on the agent's desk while it has one.
+  if (a.desk != null) {
+    const [dx, dz] = DESKS[a.desk] ?? DESKS[0];
+    rec.widgets.position.set(dx, 0, dz);
+    rec.widgets.visible = true;
+  } else rec.widgets.visible = false;
+  // A free agent out for a walk keeps walking; anything else sends it straight back to its place.
+  if (rec.wander && a.pose === "idle" && a.desk != null && rec.wander.desk === a.desk) return;
+  endWander(rec);
   let x = 0, z = 0, ry = 0, seated = false;
   if (a.desk != null) {
     const [dx, dz] = DESKS[a.desk] ?? DESKS[0];
@@ -883,7 +922,11 @@ function placeAgent(rec) {
   rec.root.position.set(x, 0, z);
   rec.root.scale.setScalar(AGENT_SCALE);
   rec.root.rotation.y = ry;
-  rec.widgets.visible = seated;
+  sitDown(rec, seated);
+}
+
+function sitDown(rec, seated) {
+  rec.seated = seated;
   for (const l of rec.legs) {
     l.hip.rotation.x = seated ? -Math.PI / 2 : 0;
     l.knee.rotation.x = seated ? Math.PI / 2 : 0;
@@ -934,7 +977,7 @@ function syncAgents() {
     }
     rec.data = a;
     const f = floors.get(a.floor);
-    if (f && rec.root.parent !== f.group) f.group.add(rec.root);
+    if (f && rec.root.parent !== f.group) f.group.add(rec.root, rec.widgets);
     placeAgent(rec);
     applyPose(rec);
   }
@@ -945,11 +988,179 @@ function removeAgent(id) {
   const rec = agents.get(id);
   if (!rec) return;
   rec.root.removeFromParent();
+  rec.widgets.removeFromParent();
+  endWander(rec);
+  rec.restartBtn?.remove();
   hitTargets.splice(hitTargets.indexOf(rec.hit), 1);
   rec.shirtTex.dispose();
   agents.delete(id);
   if (hovered === id) setHovered(null);
   if (popoverFor === id) showPopover(null);
+}
+
+// ------------------------------------------------------------------ free time
+//
+// A hired agent with no job is free, and the office shows it: now and then it gets up for a coffee,
+// looks out of the window, sits in the lounge, or chats with another free agent in the aisle. This
+// is only ever done by agents the hub reports as free ("idle"); the moment one gets work it is back
+// at its desk.
+
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+
+/** Out of the chair and into the aisle: row-one chairs are behind their desks, so go round the side. */
+function exitPath(desk) {
+  const [dx, dz] = DESKS[desk];
+  const chair = [dx, dz - 0.78];
+  return dz < 0 ? [chair, [dx + 1.1, chair[1]], [dx + 1.1, AISLE_Z]] : [chair, [dx, AISLE_Z]];
+}
+
+function wanderDue(rec, s) {
+  rec.nextWander ??= s + rand(4, 18);
+  if (s < rec.nextWander) return false;
+  rec.nextWander = s + rand(14, 40);
+  startWander(rec, s);
+  return !!rec.wander;
+}
+
+function startWander(rec, s) {
+  const a = rec.data;
+  const out = exitPath(a.desk);
+  // Half the time, find another free agent on this floor sitting at its desk and go and chat.
+  const others = [...agents.values()].filter(
+    (r) => r !== rec && r.data.floor === a.floor && r.data.pose === "idle" && r.data.desk != null && !r.wander && r.seated,
+  );
+  if (others.length && Math.random() < 0.5) {
+    const other = others[Math.floor(Math.random() * others.length)];
+    const theirs = exitPath(other.data.desk);
+    const mid = Math.min(5, Math.max(-5, (out.at(-1)[0] + theirs.at(-1)[0]) / 2));
+    const stay = rand(7, 13);
+    const talk = (r, path, x, face, partner, first) => {
+      r.wander = { desk: r.data.desk, path: [...path, [x, AISLE_Z]], back: null, leg: 0, t0: s, stay, face, chat: true, partner, first };
+      sitDown(r, false);
+    };
+    talk(rec, out, mid - 0.32, Math.PI / 2, other, true);
+    talk(other, theirs, mid + 0.32, -Math.PI / 2, rec, false);
+    return;
+  }
+  const spot = Object.values(SPOTS)[Math.floor(Math.random() * 3)];
+  rec.wander = { desk: a.desk, path: [...out, ...spot.path], back: null, leg: 0, t0: s, stay: rand(...spot.stay), face: spot.face, chat: false };
+  sitDown(rec, false);
+}
+
+/** Walk the path, stay a while, walk back, sit down. Positions are on the floor, in floor units. */
+function stepWander(rec, s) {
+  const w = rec.wander;
+  const [l, r] = rec.arms;
+  const p = rec.phase;
+  // Which leg of the path, and how far along it.
+  let t = s - w.t0;
+  for (; w.leg < w.path.length - 1; w.leg++) {
+    const [ax, az] = w.path[w.leg];
+    const [bx, bz] = w.path[w.leg + 1];
+    const d = Math.hypot(bx - ax, bz - az) / WALK_SPEED;
+    if (t < d) {
+      const k = t / d;
+      rec.root.position.set(ax + (bx - ax) * k, 0, az + (bz - az) * k);
+      rec.root.rotation.y = Math.atan2(bx - ax, bz - az);
+      // Walking: legs and arms swing, a little bob.
+      const swing = Math.sin(s * 9 + p);
+      rec.legs[0].hip.rotation.x = swing * 0.45;
+      rec.legs[1].hip.rotation.x = -swing * 0.45;
+      rec.legs[0].knee.rotation.x = Math.max(0, -swing) * 0.5;
+      rec.legs[1].knee.rotation.x = Math.max(0, swing) * 0.5;
+      l.rotation.set(-swing * 0.4, 0, -0.12);
+      r.rotation.set(swing * 0.4, 0, 0.12);
+      rec.body.position.y = Math.abs(swing) * 0.025;
+      rec.bubble.visible = false;
+      return;
+    }
+    t -= d;
+    w.t0 += d;
+  }
+  // Arrived.
+  const [ex, ez] = w.path.at(-1);
+  rec.root.position.set(ex, 0, ez);
+  for (const leg of rec.legs) {
+    leg.hip.rotation.x = 0;
+    leg.knee.rotation.x = 0;
+  }
+  if (w.back) {
+    // Home: back in the chair, facing the desk as before.
+    endWander(rec);
+    placeAgent(rec);
+    applyPose(rec);
+    return;
+  }
+  rec.root.rotation.y = w.face;
+  const stayed = s - w.t0;
+  if (w.chat) {
+    // Take turns talking; the listener nods along.
+    const turn = Math.floor(stayed / 1.8) % 2 === (w.first ? 0 : 1);
+    rec.bubble.material.map = talkTexture();
+    rec.bubble.visible = turn;
+    rec.bubble.material.needsUpdate = true;
+    if (turn) {
+      r.rotation.set(-0.7 + Math.sin(s * 5 + p) * 0.35, 0, 0.3);
+      l.rotation.set(0.05, 0, -0.12);
+    } else {
+      rec.head.rotation.x = Math.sin(s * 3 + p) * 0.08;
+      l.rotation.set(0.05, 0, -0.12);
+      r.rotation.set(0.05, 0, 0.12);
+    }
+  } else {
+    // A coffee, or a look around.
+    rec.mug.visible = true;
+    r.rotation.set(-1.9 + Math.sin(s * 0.8 + p) * 0.12, 0, 0.35);
+    l.rotation.set(0.05, 0, -0.12);
+    rec.head.rotation.y = Math.sin(s * 0.5 + p) * 0.4;
+  }
+  if (stayed >= w.stay) {
+    // Walk back the way it came.
+    rec.wander = { ...w, path: [...w.path].reverse(), back: true, leg: 0, t0: s };
+    rec.bubble.visible = false;
+    rec.mug.visible = false;
+  }
+}
+
+function endWander(rec) {
+  if (!rec.wander) return;
+  const partner = rec.wander.partner;
+  rec.wander = null;
+  rec.mug.visible = rec.data.pose === "break";
+  rec.bubble.visible = !!rec.data.bubble;
+  if (rec.data.bubble) rec.bubble.material.map = bubbleTexture(rec.data.bubble, rec.data.pose);
+  rec.bubble.material.needsUpdate = true;
+  // A chat partner left behind heads home too.
+  if (partner?.wander && !partner.wander.back) {
+    partner.wander = { ...partner.wander, partner: null, stay: 0 };
+  }
+}
+
+let talkTex = null;
+/** A white speech bubble with dots, for free agents chatting. */
+function talkTexture() {
+  talkTex ??= canvasTexture(128, 128, (g) => {
+    g.shadowColor = "rgba(0,0,0,0.25)";
+    g.shadowBlur = 8;
+    g.shadowOffsetY = 3;
+    g.fillStyle = "#ffffff";
+    g.beginPath();
+    g.roundRect(14, 22, 100, 66, 26);
+    g.fill();
+    g.beginPath();
+    g.moveTo(40, 84);
+    g.lineTo(30, 108);
+    g.lineTo(62, 86);
+    g.fill();
+    g.shadowColor = "transparent";
+    g.fillStyle = "#38bdf8";
+    for (const x of [42, 64, 86]) {
+      g.beginPath();
+      g.arc(x, 55, 7, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+  return talkTex;
 }
 
 /** Per-frame motion. Small and cheap: typing, a bounce when it needs you, a slump when failed. */
@@ -964,6 +1175,12 @@ function animate(t) {
     rec.head.rotation.set(0, 0, 0);
     rec.bubble.scale.setScalar(0.38);
     for (const e of rec.eyes) e.scale.y = 1;
+    if (a.pose === "idle" && a.desk != null && (rec.wander || wanderDue(rec, s))) {
+      stepWander(rec, s);
+      const hl = hovered === a.attemptId || popoverFor === a.attemptId;
+      rec.shirtMat.emissive.set(hl ? "#2a2a2a" : "#000000");
+      continue;
+    }
     if (rec.seated) {
       // Arms forward to the keyboard.
       l.rotation.set(-1.15, 0, -0.1);
@@ -1007,6 +1224,13 @@ function animate(t) {
       case "unknown":
         rec.head.rotation.z = Math.sin(s * 1.5 + p) * 0.18;
         break;
+      case "idle":
+        // Free: leaning back, hands off the keyboard, looking around the room.
+        rec.body.rotation.x = -0.1;
+        l.rotation.set(-0.5, 0, -0.25);
+        r.rotation.set(-0.5, 0, 0.25);
+        rec.head.rotation.y = Math.sin(s * 0.4 + p) * 0.5;
+        break;
       case "done":
         l.rotation.set(-0.4, 0, -0.5);
         r.rotation.set(-0.4, 0, 0.5);
@@ -1028,21 +1252,61 @@ function animate(t) {
 
 // ------------------------------------------------------------------ camera
 
+/**
+ * The view that fits the room into the frame: as large as fits under the top bar, with the
+ * building's left edge against the left of the frame so the room gets the space on the right.
+ */
+function fittedView(y) {
+  const target = new THREE.Vector3(0.2, y + 1.6, -0.4);
+  // Equal offsets on every axis: a true isometric view, so both walls slope at the same angle and
+  // the room's corners read as square (an uneven offset makes one wall look tilted).
+  const offset = new THREE.Vector3(18, 18, 18);
+  const probe = camera.clone();
+  probe.position.copy(target).add(offset);
+  probe.zoom = 1;
+  probe.lookAt(target);
+  probe.updateProjectionMatrix();
+  probe.updateMatrixWorld();
+  const W = stage.clientWidth || 1, H = stage.clientHeight || 1;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const cx of [-ROOM_W / 2 - 0.3, ROOM_W / 2 + 0.3])
+    for (const cz of [-ROOM_D / 2 - 0.3, ROOM_D / 2 + 0.3])
+      for (const cy of [y - 0.35, y + WALL_H]) {
+        const v = new THREE.Vector3(cx, cy, cz).project(probe);
+        minX = Math.min(minX, v.x);
+        maxX = Math.max(maxX, v.x);
+        minY = Math.min(minY, v.y);
+        maxY = Math.max(maxY, v.y);
+      }
+  // Room for the top bar and the activity panel; a small margin elsewhere (in NDC: 2 = full frame).
+  const left = -1 + (2 * 10) / W, right = 1 - (2 * 10) / W, top = 1 - (2 * 58) / H, bottom = -1 + (2 * 14) / H;
+  const zoom = Math.min(controls.maxZoom, Math.max(controls.minZoom, Math.min((right - left) / (maxX - minX), (top - bottom) / (maxY - minY))));
+  // Shift so the left edge sits on the left margin and the room is centred top to bottom.
+  const dx = left - minX * zoom;
+  const dy = (top + bottom) / 2 - ((minY + maxY) / 2) * zoom;
+  const halfW = (probe.right - probe.left) / 2 / zoom, halfH = (probe.top - probe.bottom) / 2 / zoom;
+  const rightV = new THREE.Vector3().setFromMatrixColumn(probe.matrixWorld, 0);
+  const upV = new THREE.Vector3().setFromMatrixColumn(probe.matrixWorld, 1);
+  const shift = rightV.multiplyScalar(-dx * halfW).add(upV.multiplyScalar(-dy * halfH));
+  target.add(shift);
+  return { target, pos: target.clone().add(offset), zoom };
+}
+
 function resetCamera(instant = false) {
   const y = floorY(selectedFloor);
-  const target = new THREE.Vector3(0.2, y + 1.6, -0.4);
-  const pos = target.clone().add(new THREE.Vector3(17, 17, 19));
+  const { target, pos, zoom } = fittedView(y);
+  if (!instant) userMoved = false;
   if (instant) {
     controls.target.copy(target);
     camera.position.copy(pos);
-    camera.zoom = 1;
+    camera.zoom = zoom;
     camera.updateProjectionMatrix();
     placeSun(y);
     controls.update();
     kick();
     return;
   }
-  tween = { t0: performance.now(), dur: 650, fromT: controls.target.clone(), toT: target, fromP: camera.position.clone(), toP: pos, fromZ: camera.zoom, toZ: 1 };
+  tween = { t0: performance.now(), dur: 650, fromT: controls.target.clone(), toT: target, fromP: camera.position.clone(), toP: pos, fromZ: camera.zoom, toZ: zoom };
   placeSun(y);
   kick();
 }
@@ -1120,7 +1384,7 @@ function active() {
 }
 
 function animating() {
-  return [...agents.values()].some((r) => r.data.floor === selectedFloor && ["working", "waiting", "unknown", "break"].includes(r.data.pose));
+  return [...agents.values()].some((r) => r.data.floor === selectedFloor && ["working", "waiting", "unknown", "break", "idle"].includes(r.data.pose));
 }
 
 function kick() {
@@ -1165,7 +1429,7 @@ function setHovered(id) {
   hud.hoverTag.hidden = !id || id === popoverFor;
   if (id) {
     const a = agents.get(id).data;
-    hud.hoverTag.replaceChildren(esc("strong", "", a.roleTitle), esc("span", "", a.doing ?? a.status));
+    hud.hoverTag.replaceChildren(esc("strong", "", who(a)), esc("span", "", a.doing ?? a.status));
   }
   kick();
   positionOverlays();
@@ -1181,7 +1445,32 @@ function screenOf(id, lift = 2.15) {
   return { x: ((v.x + 1) / 2) * stage.clientWidth, y: ((1 - v.y) / 2) * stage.clientHeight };
 }
 
+/** A Restart button over each failed agent on this floor, so getting it going again is one click. */
+function placeRestartButtons() {
+  for (const [id, rec] of agents) {
+    const show = onRestart && rec.data.pose === "failed" && rec.data.floor === selectedFloor && !rec.data.attemptId.startsWith("staff:");
+    if (!show) {
+      if (rec.restartBtn) rec.restartBtn.hidden = true;
+      continue;
+    }
+    if (!rec.restartBtn) {
+      rec.restartBtn = esc("button", "o3-restart", "↻ Restart");
+      rec.restartBtn.title = "Send it back to work where it stopped (e.g. after a usage limit)";
+      rec.restartBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        rec.restartBtn.disabled = true;
+        Promise.resolve(onRestart(id)).finally(() => (rec.restartBtn.disabled = false));
+      });
+      stage.append(rec.restartBtn);
+    }
+    const p = screenOf(id, 2.4);
+    rec.restartBtn.hidden = !p;
+    if (p) Object.assign(rec.restartBtn.style, { left: `${p.x}px`, top: `${p.y}px` });
+  }
+}
+
 function positionOverlays() {
+  placeRestartButtons();
   if (hovered && !hud.hoverTag.hidden) {
     const p = screenOf(hovered);
     if (p) Object.assign(hud.hoverTag.style, { left: `${p.x}px`, top: `${p.y}px` });
@@ -1192,10 +1481,10 @@ function positionOverlays() {
       // Above the head when there is room under the top bar; otherwise beside the agent.
       const w = hud.popover.offsetWidth, h = hud.popover.offsetHeight;
       const above = p.y - h - 10 > 56;
-      const x = Math.min(Math.max(p.x, w / 2 + 250), stage.clientWidth - w / 2 - 310);
+      const x = Math.min(Math.max(p.x, w / 2 + 12), stage.clientWidth - w / 2 - 12);
       Object.assign(hud.popover.style, above
         ? { left: `${x}px`, top: `${p.y}px`, transform: "translate(-50%, calc(-100% - 10px))" }
-        : { left: `${Math.min(p.x + 40, stage.clientWidth - w - 310)}px`, top: `${Math.max(p.y, 60)}px`, transform: "none" });
+        : { left: `${Math.min(p.x + 40, stage.clientWidth - w - 12)}px`, top: `${Math.max(p.y, 60)}px`, transform: "none" });
     }
   }
 }
@@ -1208,7 +1497,7 @@ function showPopover(id) {
   const a = agents.get(id).data;
   const pose = POSE[a.pose] ?? POSE.preparing;
   const kits = a.kits.map((k) => `${WIDGETS[k.widget] ?? WIDGETS.toolbox} ${k.title}`).join("  ");
-  const open = esc("button", "o3-primary", a.pose === "waiting" ? "Review request" : a.pose === "done" ? "Review result" : "Open job");
+  const open = esc("button", "o3-primary", a.pose === "waiting" ? "Review request" : a.pose === "done" ? "Review result" : a.jobId ? "Open job" : "Give a job");
   open.addEventListener("click", () => {
     showPopover(null);
     onSelect(a.attemptId);
@@ -1216,30 +1505,56 @@ function showPopover(id) {
   const close = esc("button", "o3-x", "✕");
   close.title = "Close";
   close.addEventListener("click", () => showPopover(null));
-  const status = esc("div", "o3-pop-status", pose.label);
+  const status = esc("div", "o3-pop-status", a.pose === "done" ? capitalize(a.status) : pose.label);
   status.style.color = pose.color;
+  const extra = esc("div", "o3-pop-actions");
+  if (a.pose === "failed" && onRestart) {
+    const b = esc("button", "o3-primary", "↻ Restart");
+    b.title = "Send it back to work where it stopped (e.g. after a usage limit)";
+    b.addEventListener("click", () => {
+      showPopover(null);
+      onRestart(a.attemptId);
+    });
+    extra.append(b);
+  }
+  const link = t3Url(a.attemptId);
+  if (link) {
+    const t = esc("a", "o3-link", "Open in T3 ↗");
+    t.href = link;
+    t.target = "_blank";
+    t.rel = "noopener";
+    t.title = "This agent's thread in T3: everything it did, step by step";
+    extra.append(t);
+  }
   hud.popover.replaceChildren(
     close,
-    esc("div", "o3-pop-title", a.jobTitle),
+    esc("div", "o3-pop-title", a.name ?? a.jobTitle),
     esc("div", "o3-pop-sub", `${a.roleTitle}${a.department ? ` · ${a.department}` : ""}`),
+    a.name && a.jobId ? esc("div", "o3-pop-doing", a.jobTitle) : "",
     status,
     a.doing ? esc("div", "o3-pop-doing", a.doing) : "",
     esc("div", "o3-pop-meta", `${a.harness.label} · ${shortModel(a.model)}`),
     kits ? esc("div", "o3-pop-meta", kits) : "",
     open,
+    extra.childElementCount ? extra : "",
   );
   positionOverlays();
   kick();
 }
 
-/** Turn the camera toward one agent (from the floor panel). */
-function focusAgent(id) {
+/**
+ * Turn the camera toward one agent (from the Staff list or a counter's list). Takes an attempt id,
+ * or "staff:<name>" for a hired agent whether it is free or on a job.
+ */
+export function focusAgent(id) {
+  if (id?.startsWith("staff:") && !agents.has(id)) id = [...agents.values()].find((r) => `staff:${r.data.staff}` === id)?.data.attemptId ?? id;
   const rec = agents.get(id);
   if (!rec) return;
   if (rec.data.floor !== selectedFloor) goToFloor(rec.data.floor);
   const p = new THREE.Vector3();
   rec.root.getWorldPosition(p);
   p.y += 0.8;
+  userMoved = true;
   const off = camera.position.clone().sub(controls.target);
   tween = { t0: performance.now(), dur: 500, fromT: controls.target.clone(), toT: p, fromP: camera.position.clone(), toP: p.clone().add(off) };
   camera.zoom = Math.max(camera.zoom, 1.6);
@@ -1268,12 +1583,19 @@ function buildHud() {
   hud.nightB = nightB;
   hud.modes.append(day, nightB, hud.tour);
   hud.counters = h("o3-panel o3-counters");
-  hud.left = h("o3-left");
-  hud.floorPanel = h("o3-floor-panel");
+  hud.floorsChip = h("o3-panel o3-floors-chip");
+  hud.drop = h("o3-panel o3-drop");
+  hud.drop.hidden = true;
   hud.activity = h("o3-panel o3-activity");
+  // What needs you, in the corner above Activity: requests to answer, failures to restart, results
+  // to review. Nothing shows when nothing needs you.
+  hud.attention = h("o3-panel o3-attention");
+  hud.attention.hidden = true;
+  hud.bottomLeft = h("o3-bl", hud.attention, hud.activity);
   hud.hint = h("o3-panel o3-hint");
   hud.hint.innerHTML = "<b>Drag</b> rotate <b>Right-drag</b> move <b>Scroll</b> zoom <b>↑ ↓</b> floors <b>Click</b> an agent";
   hud.zoom = h("o3-zoom");
+  hud.dropFor = null;
   for (const [label, title, fn] of [
     ["+", "Zoom in", () => zoomBy(1.25)],
     ["−", "Zoom out", () => zoomBy(0.8)],
@@ -1292,12 +1614,17 @@ function buildHud() {
   hud.hoverTag.hidden = true;
   hud.popover = h("o3-panel o3-popover");
   hud.popover.hidden = true;
-  const top = h("o3-top", hud.title, hud.modes, hud.counters);
-  stage.append(top, hud.left, hud.floorPanel, hud.activity, hud.hint, hud.zoom, hud.banner, hud.empty, hud.hoverTag, hud.popover);
+  const top = h("o3-top", hud.title, hud.modes, hud.floorsChip, hud.counters);
+  stage.append(top, hud.drop, hud.bottomLeft, hud.hint, hud.zoom, hud.banner, hud.empty, hud.hoverTag, hud.popover);
+  // A click anywhere else closes an open list.
+  stage.addEventListener("pointerdown", (e) => {
+    if (hud.dropFor && !e.target.closest(".o3-drop, .o3-chip, .o3-floors-chip")) toggleDrop(null);
+  });
   hud.collapsed = JSON.parse(localStorage.getItem("studio.hud.collapsed") ?? '{"finished":true}');
 }
 
 function zoomBy(k) {
+  userMoved = true;
   camera.zoom = Math.min(controls.maxZoom, Math.max(controls.minZoom, camera.zoom * k));
   camera.updateProjectionMatrix();
   kick();
@@ -1328,20 +1655,7 @@ function applyDayNight() {
   }
 }
 
-function collapsible(id, title, count, body) {
-  const wrap = esc("div", "o3-panel o3-section");
-  const head = esc("button", "o3-section-head");
-  const open = !hud.collapsed[id];
-  head.append(esc("span", "", title), esc("span", `o3-count${count && id === "waiting" ? " warn" : ""}`, String(count)), esc("span", "o3-chev", open ? "▴" : "▾"));
-  head.addEventListener("click", () => {
-    hud.collapsed[id] = open;
-    localStorage.setItem("studio.hud.collapsed", JSON.stringify(hud.collapsed));
-    renderHud();
-  });
-  wrap.append(head);
-  if (open) wrap.append(body);
-  return wrap;
-}
+const capitalize = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
 function agentRow(a, action) {
   const row = esc("div", "o3-row");
@@ -1351,104 +1665,197 @@ function agentRow(a, action) {
   st.style.background = (POSE[a.pose] ?? POSE.preparing).color;
   dot.append(st);
   const text = esc("div", "o3-row-text");
-  text.append(esc("div", "o3-row-name", a.roleTitle), esc("div", "o3-row-sub", `${(POSE[a.pose] ?? POSE.preparing).label} · ${a.doing ?? a.jobTitle}`));
+  text.append(esc("div", "o3-row-name", who(a)), esc("div", "o3-row-sub", `${capitalize(a.status)} · ${a.doing ?? a.jobTitle}`));
   row.append(dot, text);
   if (action) {
-    const b = esc("button", "o3-mini", action);
+    const b = esc("button", "o3-mini", action.label);
     b.addEventListener("click", (e) => {
       e.stopPropagation();
-      onSelect(a.attemptId);
+      toggleDrop(null);
+      action.run();
     });
     row.append(b);
   }
-  row.addEventListener("click", () => focusAgent(a.attemptId));
+  row.addEventListener("click", () => {
+    toggleDrop(null);
+    focusAgent(a.attemptId);
+  });
   return row;
+}
+
+/** The list under a counter in the top bar: who is working, failed, waiting for you, to review. */
+function toggleDrop(kind, anchor) {
+  hud.dropFor = kind && hud.dropFor !== kind ? kind : null;
+  hud.drop.hidden = !hud.dropFor;
+  if (!hud.dropFor) return;
+  renderDrop();
+  const r = anchor.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  hud.drop.style.left = `${Math.min(r.left - s.left, stage.clientWidth - 320)}px`;
+  hud.drop.style.top = `${r.bottom - s.top + 6}px`;
+}
+
+function renderDrop() {
+  if (!hud.dropFor || !current) return;
+  const all = current.agents;
+  const list = esc("div", "o3-list");
+  const open = (a) => ({ label: "Open", run: () => onSelect(a.attemptId) });
+  if (hud.dropFor === "floors") {
+    [...current.floors].reverse().forEach((fl) => {
+      const i = current.floors.indexOf(fl);
+      const here = all.filter((a) => a.floor === fl.worker);
+      const row = esc("button", `o3-floor${fl.worker === selectedFloor ? " on" : ""}${fl.online ? "" : " off"}`);
+      const dots = esc("span", "o3-dots");
+      for (const a of here) {
+        const d = esc("i", "");
+        d.style.background = (POSE[a.pose] ?? POSE.preparing).color;
+        dots.append(d);
+      }
+      const name = esc("span", "o3-floor-name");
+      name.append(esc("span", "", fl.worker), dots);
+      row.append(esc("span", "o3-num", String(i + 1)), name, esc("span", "o3-cap", fl.online ? `${here.length}/${fl.desks}` : "offline"));
+      row.addEventListener("click", () => {
+        toggleDrop(null);
+        goToFloor(fl.worker);
+      });
+      list.append(row);
+    });
+  } else if (hud.dropFor === "review") {
+    // Every result waiting for your accept or reject, even once its agent has moved on.
+    for (const r of current.toReview ?? []) {
+      const row = esc("div", "o3-row");
+      const text = esc("div", "o3-row-text");
+      text.append(esc("div", "o3-row-name", r.name ? `${r.name} · ${r.roleTitle}` : r.roleTitle), esc("div", "o3-row-sub", r.jobTitle));
+      const b = esc("button", "o3-mini", "Review");
+      row.append(text, b);
+      row.addEventListener("click", () => {
+        toggleDrop(null);
+        onSelect(r.attemptId);
+      });
+      list.append(row);
+    }
+  } else {
+    const poses = hud.dropFor === "unknown" ? ["unknown", "offline"] : [hud.dropFor];
+    for (const a of all.filter((x) => poses.includes(x.pose))) {
+      const action =
+        a.pose === "failed" && onRestart
+          ? { label: "↻ Restart", run: () => onRestart(a.attemptId) }
+          : a.pose === "waiting"
+            ? { label: "Review", run: () => onSelect(a.attemptId) }
+            : open(a);
+      list.append(agentRow(a, action));
+    }
+  }
+  if (!list.childElementCount) list.append(esc("div", "o3-none", "No one right now"));
+  hud.drop.replaceChildren(list);
+}
+
+function renderAttention() {
+  const all = current.agents;
+  const rows = [];
+  const row = (cls, name, what, label, run, focusId) => {
+    const r = esc("div", `o3-att att-${cls}`);
+    const text = esc("div", "o3-row-text");
+    text.append(esc("div", "o3-row-name", name), esc("div", "o3-row-sub", what));
+    const b = esc("button", "o3-mini", label);
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      run();
+    });
+    r.append(esc("i", ""), text, b);
+    r.addEventListener("click", () => (focusId && agents.has(focusId) ? focusAgent(focusId) : run()));
+    rows.push(r);
+  };
+  for (const a of all.filter((x) => x.pose === "waiting")) row("waiting", who(a), `Needs you · ${a.jobTitle}`, "Review", () => onSelect(a.attemptId), a.attemptId);
+  for (const a of all.filter((x) => x.pose === "failed" && !x.attemptId.startsWith("staff:")))
+    row("failed", who(a), `Failed · ${a.jobTitle}`, onRestart ? "↻ Restart" : "Open", () => (onRestart ? onRestart(a.attemptId) : onSelect(a.attemptId)), a.attemptId);
+  const review = current.toReview ?? [];
+  for (const r of review.slice(0, 3)) {
+    const here = all.find((a) => a.attemptId === r.attemptId);
+    row("review", r.name ? `${r.name} · ${r.roleTitle}` : r.roleTitle, `To review · ${r.jobTitle}`, "Review", () => onSelect(r.attemptId), here?.attemptId);
+  }
+  hud.attention.hidden = rows.length === 0;
+  if (!rows.length) return hud.attention.replaceChildren();
+  const head = esc("div", "o3-head", "Needs attention");
+  if (review.length > 3) {
+    const more = esc("button", "o3-more", `+${review.length - 3} more to review`);
+    more.addEventListener("click", () => toggleDrop("review", more));
+    hud.attention.replaceChildren(head, ...rows, more);
+  } else hud.attention.replaceChildren(head, ...rows);
 }
 
 function renderHud() {
   if (!current) return;
   const all = current.agents;
   const count = (pose) => all.filter((a) => a.pose === pose).length;
+  const fl = current.floors.find((f) => f.worker === selectedFloor);
 
-  hud.title.replaceChildren(esc("span", "o3-logo", "◆"), esc("strong", "", "Studio Office"), esc("span", "o3-live", `Live · ${clock()}`));
+  hud.title.replaceChildren(
+    esc("span", "o3-logo", "◆"),
+    esc("strong", "", "Studio Office"),
+    fl ? esc("span", "o3-floor-tag", `${fl.worker} · floor ${current.floors.indexOf(fl) + 1}`) : "",
+    esc("span", "o3-live", `Live · ${clock()}`),
+  );
 
+  // Floors: only a chooser when there is more than one.
+  hud.floorsChip.hidden = current.floors.length < 2;
+  if (current.floors.length > 1) {
+    const b = esc("button", "", `Floors ${current.floors.length} ▾`);
+    b.addEventListener("click", () => toggleDrop("floors", b));
+    hud.floorsChip.replaceChildren(b);
+  }
+
+  // The counters are also the lists: click one to see who.
   const chips = [
     ["working", count("working"), "working"],
     ["waiting", count("waiting"), "need you"],
     ["failed", count("failed"), "failed"],
-    ["done", count("done"), "to review"],
+    ["review", current.toReview?.length ?? count("done"), "to review"],
     ["break", count("break"), "on a break"],
+    ["idle", count("idle"), "free"],
     ["unknown", count("unknown") + count("offline"), "unknown"],
   ];
   hud.counters.replaceChildren(
     ...chips
-      .filter(([pose, n]) => n || pose === "working" || pose === "waiting" || pose === "failed")
+      .filter(([pose, n]) => n || pose === "working" || pose === "waiting")
       .map(([pose, n, label]) => {
-        const c = esc("span", "o3-chip");
+        const c = esc("button", `o3-chip${hud.dropFor === pose ? " on" : ""}${pose === "waiting" && n ? " warn" : ""}`);
         const d = esc("i", "");
-        d.style.background = POSE[pose].color;
+        d.style.background = (POSE[pose] ?? POSE.done).color;
         c.append(d, esc("b", "", String(n)), ` ${label}`);
+        c.addEventListener("click", () => toggleDrop(pose, c));
         return c;
       }),
   );
+  renderDrop();
 
-  // Floors, top floor first like a building directory.
-  const floorsEl = esc("div", "o3-panel o3-floors");
-  floorsEl.append(esc("div", "o3-head", "Floors"));
-  [...current.floors].reverse().forEach((fl) => {
-    const i = current.floors.indexOf(fl);
-    const here = all.filter((a) => a.floor === fl.worker);
-    const row = esc("button", `o3-floor${fl.worker === selectedFloor ? " on" : ""}${fl.online ? "" : " off"}`);
-    const dots = esc("span", "o3-dots");
-    for (const a of here) {
-      const d = esc("i", "");
-      d.style.background = (POSE[a.pose] ?? POSE.preparing).color;
-      dots.append(d);
-    }
-    const name = esc("span", "o3-floor-name");
-    name.append(esc("span", "", fl.worker), dots);
-    row.append(esc("span", "o3-num", String(i + 1)), name, esc("span", "o3-cap", fl.online ? `${here.length}/${fl.desks}` : "offline"));
-    row.addEventListener("click", () => goToFloor(fl.worker));
-    floorsEl.append(row);
-  });
-
-  const waiting = all.filter((a) => a.pose === "waiting");
-  const wBody = esc("div", "o3-list");
-  if (waiting.length) waiting.forEach((a) => wBody.append(agentRow(a, "Review")));
-  else wBody.append(esc("div", "o3-none", "Nothing needs you"));
-  const done = all.filter((a) => a.pose === "done" || a.pose === "failed");
-  const dBody = esc("div", "o3-list");
-  if (done.length) done.forEach((a) => dBody.append(agentRow(a, "Open")));
-  else dBody.append(esc("div", "o3-none", "Nothing finished yet"));
-  hud.left.replaceChildren(floorsEl, collapsible("waiting", "Needs you", waiting.length, wBody), collapsible("finished", "Finished", done.length, dBody));
-
-  // The selected floor's people.
-  const fl = current.floors.find((f) => f.worker === selectedFloor);
   if (!fl) {
     // No machines paired: an empty lot, not a pretend office.
-    hud.floorPanel.replaceChildren();
     hud.banner.hidden = true;
     hud.empty.hidden = false;
-    hud.empty.textContent = "No machines yet. Pair one under Workers (left) and its floor appears here.";
+    hud.empty.textContent = "No computers yet. Connect one under Computers (left) and its floor appears here.";
   }
   if (fl) {
     const here = all.filter((a) => a.floor === fl.worker);
-    const working = here.filter((a) => a.pose === "working").length;
-    const head = esc("div", `o3-fp-head${fl.online ? "" : " off"}`);
-    const l = esc("div", "");
-    l.append(esc("div", "o3-fp-name", fl.worker), esc("div", "o3-fp-big", fl.online ? `${working} working` : "unreachable"));
-    head.append(l, esc("div", "o3-fp-meta", `Floor ${current.floors.indexOf(fl) + 1} · ${here.length} agent${here.length === 1 ? "" : "s"}`));
-    const list = esc("div", "o3-list");
-    for (const a of here) list.append(agentRow(a, a.pose === "waiting" ? "Review" : null));
-    if (!here.length) list.append(esc("div", "o3-none", "No one at work on this floor"));
-    const panel = esc("div", "o3-panel");
-    panel.append(head, list);
-    hud.floorPanel.replaceChildren(panel);
     hud.banner.hidden = fl.online;
     hud.banner.textContent = fl.online ? "" : `This machine is unreachable: ${fl.error ?? "offline"}`;
     hud.empty.hidden = !fl.online || here.length > 0;
-    hud.empty.textContent = "No one at work on this floor";
+    // An empty office is the first thing you see: offer to hire someone right there.
+    const anyone = current.agents.length > 0;
+    const msg = esc("div", "", anyone ? "No one on this floor" : "Your studio has no staff yet");
+    hud.empty.replaceChildren(msg);
+    if (onHire) {
+      const b = esc("button", "o3-primary o3-hire", anyone ? "Hire an agent for this floor" : "Hire your first agent");
+      b.addEventListener("click", () => onHire({ worker: fl.worker }));
+      hud.empty.append(b);
+    }
+    if (onChat && !anyone) {
+      const c = esc("button", "o3-link o3-hire", "…or just tell the chat what you need");
+      c.addEventListener("click", () => onChat("Help me hire my first agent."));
+      hud.empty.append(c);
+    }
   }
+
+  renderAttention();
 
   hud.activity.replaceChildren(esc("div", "o3-head", "Activity"));
   const items = activityLog.slice(0, 6);
@@ -1470,14 +1877,21 @@ function logChanges(prev, next) {
   const before = new Map((prev?.agents ?? []).map((a) => [a.attemptId, a]));
   const after = new Map(next.agents.map((a) => [a.attemptId, a]));
   const now = clock();
-  const add = (a, what) => activityLog.unshift({ time: now, who: a.roleTitle, what, id: a.attemptId });
+  const add = (a, what) => activityLog.unshift({ time: now, who: a.name ?? a.roleTitle, what, id: a.attemptId });
+  // A staff member taking a job, or finishing one, changes id but is the same person.
+  const staffBefore = new Set((prev?.agents ?? []).map((a) => a.staff).filter(Boolean));
+  const staffAfter = new Set(next.agents.map((a) => a.staff).filter(Boolean));
   for (const a of next.agents) {
     const b = before.get(a.attemptId);
-    if (!b) add(a, `arrived: ${a.jobTitle}`);
+    if (!b && a.staff && !a.jobId) add(a, staffBefore.has(a.staff) ? "is free again" : "joined the studio");
+    else if (!b) add(a, a.staff && staffBefore.has(a.staff) ? `started: ${a.jobTitle}` : `arrived: ${a.jobTitle}`);
     else if (b.pose !== a.pose) add(a, (POSE[a.pose] ?? POSE.preparing).label);
     else if (a.doing && a.doing !== b.doing) add(a, a.doing);
   }
-  for (const [id, b] of before) if (!after.has(id)) activityLog.unshift({ time: now, who: b.roleTitle, what: "went home", id: null });
+  for (const [id, b] of before) {
+    if (after.has(id) || (b.staff && staffAfter.has(b.staff))) continue;
+    activityLog.unshift({ time: now, who: b.name ?? b.roleTitle, what: b.staff ? "left the studio" : "went home", id: null });
+  }
   activityLog.length = Math.min(activityLog.length, 40);
 }
 

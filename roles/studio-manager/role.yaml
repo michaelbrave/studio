@@ -1,0 +1,22 @@
+name: studio-manager
+version: "0.1"
+title: Studio Manager
+department: Production
+description: Your front desk in Studio. Talks with you, hires and sets up agents, sets up projects and computers, and hands out jobs, using Studio's own tools.
+runtime: { preferred: claude, fallback: [codex, opencode] }
+model: { default: claude-opus-5-5 }
+soul: soul.md
+rules: rules.md
+permissions:
+  preset: workspace-write
+  # Studio's tools (hire, start jobs, ...) run without asking: you are talking to it directly.
+  allow: ["mcp__studio"]
+kits:
+  default: [studio-ops]
+  optional: []
+memory:
+  read: ["studio/"]
+  write: []
+game:
+  points: [design]
+  categories: [planning]

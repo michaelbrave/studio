@@ -12,7 +12,8 @@ export type Pose =
   | "done" // result available, waiting for your decision
   | "failed"
   | "preparing"
-  | "offline"; // its machine is not reachable
+  | "offline" // its machine is not reachable
+  | "idle"; // a hired staff member with no job: at its desk, free for work
 
 /** What the speech bubble over an agent's head says; the view picks an emoji for each. */
 export type Bubble = "dots" | "exclamation" | "question" | "sleep" | "star" | "cross" | "bars" | "idea" | "hourglass" | "plug" | null;
@@ -40,15 +41,25 @@ export interface SceneInput {
       verdict: string | null;
       created_at: number;
       last_observed_at: number | null;
+      /** The hired staff member doing it, if any. */
+      staff?: string | null;
+      /** When you opened the finished attempt in Studio; looking at it lets the agent move on. */
+      seen_at?: number | null;
     }>;
   }>;
   cards: Array<{ id: string; title: string; column: string; role: string; project: string }>;
   /** Latest activity per running Attempt, if the hub has read it. */
   activity: Record<string, { kind: string; title: string | null }>;
+  /** Hired staff. Those with no job in the office sit at a desk on their home machine's floor. */
+  staff?: Array<{ name: string; displayName: string; role: string; worker: string; runtime: string; model: string | null; kits: string[] }>;
 }
 
 export interface Agent {
+  /** The Attempt this agent is working on; for an idle staff member, "staff:<name>". */
   attemptId: string;
+  /** The hired staff member this is, and its name; null for an agent hired for one job. */
+  staff: string | null;
+  name: string | null;
   jobId: string;
   jobTitle: string;
   floor: string;
@@ -83,14 +94,21 @@ export interface Floor {
 export interface Scene {
   floors: Floor[];
   agents: Agent[];
+  /** Finished work waiting for your accept or reject, whether or not its agent is still at a desk. */
+  toReview: Array<{ attemptId: string; jobId: string; jobTitle: string; name: string | null; roleTitle: string }>;
   /** Cards pinned to the wall, by column; `project` is "<worker>/<projectId>". */
   wall: Record<string, Array<{ id: string; title: string; role: string; project: string }>>;
   /** Desk assignments to pass back in next time, so agents keep their desks. */
   seats: Record<string, number>;
 }
 
-/** Finished agents stay at their desks this long so you see the outcome, then go home. */
-export const LINGER_MS = 30 * 60_000;
+/**
+ * A result waiting for your review, or a failure, shows at the desk until you open it in Studio,
+ * or for this long; then a hired agent is free again (the result itself stays in "to review").
+ */
+export const REVIEW_WAIT_MS = 2 * 60 * 60_000;
+/** Cross-checks, plans and integrations need nothing from you; they show the outcome this long. */
+export const LINGER_MS = 10 * 60_000;
 export const DESKS_PER_FLOOR = 8;
 const ACTIVE = new Set(["queued", "preparing", "running", "awaiting_input", "capacity_paused", "status_unknown"]);
 
@@ -149,17 +167,41 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/** Whether an Attempt has someone in the office right now. */
-function present(
-  job: SceneInput["jobs"][number],
-  a: SceneInput["jobs"][number]["attempts"][number],
-  now: number,
-): boolean {
+type JobIn = SceneInput["jobs"][number];
+type AttemptIn = JobIn["attempts"][number];
+
+/** A result for you to accept or reject, or a failure for you to restart or drop. */
+function needsYou(job: JobIn, a: AttemptIn): boolean {
+  return (a.state === "result_available" && job.kind === "work" && !job.milestone) || a.state === "failed";
+}
+
+/**
+ * Whether an Attempt has someone in the office right now. Once you have dealt with the outcome
+ * (accepted or rejected it, or opened it to look) the agent is settled: a hired one is free at
+ * its desk again, and one brought in for the job goes home.
+ */
+export function present(job: JobIn, a: AttemptIn, now: number): boolean {
   if (ACTIVE.has(a.state)) return true;
-  // A work result waiting for your accept/reject keeps its agent at the desk until you decide.
-  if (a.state === "result_available" && job.kind === "work" && !job.milestone) return true;
+  if (a.state === "stopped") return false;
   const ended = a.last_observed_at ?? a.created_at;
-  return now - ended < LINGER_MS && a.state !== "stopped";
+  if (needsYou(job, a)) return !a.seen_at && now - ended < REVIEW_WAIT_MS;
+  if (job.kind === "work") return false; // you decided: accepted, rejected or integrated
+  return now - ended < LINGER_MS;
+}
+
+/** What a finished agent's hover line says: only work waits for your review. */
+function doneStatus(job: JobIn, a: AttemptIn): string {
+  const verdict = a.verdict ? (a.verdict === "APPROVE" ? "approved" : "changes requested") : null;
+  switch (job.kind) {
+    case "review":
+      return verdict ? `cross-check done: ${verdict}` : "cross-check done";
+    case "planning":
+      return "plan done: cards are on the Board";
+    case "integration":
+      return "integration done";
+    default:
+      return STATUS.done + (verdict ? ` · ${verdict}` : "");
+  }
 }
 
 export function buildScene(input: SceneInput, previousSeats: Record<string, number> = {}): Scene {
@@ -188,55 +230,132 @@ export function buildScene(input: SceneInput, previousSeats: Record<string, numb
     return null;
   };
 
+  // Who is in the office: each present Attempt, then each staff member with no job here. Staff
+  // keep one seat ("staff:<name>") whether idle or working, so they do not change desks.
+  const staffBy = new Map((input.staff ?? []).map((m) => [m.name, m]));
+  const floors = new Set(input.workers.map((w) => w.name));
+  type Occupant = { key: string; floor: string; visiting: Agent["visiting"]; make: (desk: number | null) => Agent };
+  const occupants: Occupant[] = [];
+  const seatKeys = new Set<string>();
+  for (const { job, a } of people) {
+    const member = a.staff ? staffBy.get(a.staff) : undefined;
+    const staffKey = a.staff ? `staff:${a.staff}` : null;
+    const key = staffKey && !seatKeys.has(staffKey) ? staffKey : a.id;
+    seatKeys.add(key);
+    occupants.push({
+      key,
+      floor: a.worker,
+      visiting: standing(job),
+      make: (desk) => {
+        const role = roles.get(a.role ?? "");
+        const harness = input.harnesses[a.provider ?? ""] ?? { label: a.provider ?? "?", vendor: "?", color: "#777777" };
+        const pose = poseFor(a.state, online.get(a.worker) ?? false);
+        const bubble = bubbleFor(pose, input.activity[a.id]);
+
+        return {
+          attemptId: a.id,
+          staff: a.staff ?? null,
+          name: member?.displayName ?? a.staff ?? null,
+          jobId: job.id,
+          jobTitle: job.title,
+          floor: a.worker,
+          desk,
+          visiting: standing(job),
+          role: a.role ?? "",
+          roleTitle: role?.title ?? a.role ?? "Agent",
+          department: role?.department ?? "",
+          harness: { provider: a.provider ?? "", ...harness },
+          model: a.model ?? "default model",
+          kits: (a.kits ? (JSON.parse(a.kits) as string[]) : []).map((k) => kits.get(k) ?? { name: k, title: k, widget: "toolbox" }),
+          pose,
+          bubble,
+          status: pose === "done" ? doneStatus(job, a) : STATUS[pose],
+          doing: pose === "working" ? doingLine(input.activity[a.id]) : null,
+          look: hash(a.staff ? `staff:${a.staff}` : a.id),
+        };
+      },
+    });
+  }
+  for (const m of input.staff ?? []) {
+    const key = `staff:${m.name}`;
+    if (seatKeys.has(key)) continue; // at work
+    // A staff member whose home machine is gone sits on the first floor there is.
+    const floor = floors.has(m.worker) ? m.worker : input.workers[0]?.name;
+    if (!floor) continue;
+    seatKeys.add(key);
+    occupants.push({
+      key,
+      floor,
+      visiting: null,
+      make: (desk) => {
+        const role = roles.get(m.role);
+        const harness = input.harnesses[m.runtime] ?? { label: m.runtime, vendor: "?", color: "#777777" };
+        const pose: Pose = online.get(floor) ? "idle" : "offline";
+        return {
+          attemptId: key,
+          staff: m.name,
+          name: m.displayName,
+          jobId: "",
+          jobTitle: "No job yet",
+          floor,
+          desk,
+          visiting: null,
+          role: m.role,
+          roleTitle: role?.title ?? m.role,
+          department: role?.department ?? "",
+          harness: { provider: m.runtime, ...harness },
+          model: m.model ?? "default model",
+          kits: m.kits.map((k) => kits.get(k) ?? { name: k, title: k, widget: "toolbox" }),
+          pose,
+          bubble: bubbleFor(pose),
+          status: STATUS[pose],
+          doing: null,
+          look: hash(key),
+        };
+      },
+    });
+  }
+
   // Keep previous seats first, then fill free desks in arrival order.
   const order = [
-    ...people.filter((p) => previousSeats[p.a.id] !== undefined),
-    ...people.filter((p) => previousSeats[p.a.id] === undefined),
+    ...occupants.filter((o) => previousSeats[o.key] !== undefined),
+    ...occupants.filter((o) => previousSeats[o.key] === undefined),
   ];
-  for (const { job, a } of order) {
-    const visiting = standing(job);
+  for (const o of order) {
     let desk: number | null = null;
-    if (!visiting) {
-      const used = taken.get(a.worker) ?? new Set<number>();
-      const prev = previousSeats[a.id];
+    if (!o.visiting) {
+      const used = taken.get(o.floor) ?? new Set<number>();
+      const prev = previousSeats[o.key];
       desk = prev !== undefined && !used.has(prev) ? prev : [...Array(DESKS_PER_FLOOR).keys()].find((d) => !used.has(d)) ?? null;
       if (desk === null) continue; // a full floor: the extra agent waits off screen
       used.add(desk);
-      taken.set(a.worker, used);
-      seats[a.id] = desk;
+      taken.set(o.floor, used);
+      seats[o.key] = desk;
     }
-    const role = roles.get(a.role ?? "");
-    const harness = input.harnesses[a.provider ?? ""] ?? { label: a.provider ?? "?", vendor: "?", color: "#777777" };
-    const pose = poseFor(a.state, online.get(a.worker) ?? false);
-    const bubble = bubbleFor(pose, input.activity[a.id]);
-    const verdict = a.verdict ? ` · ${a.verdict === "APPROVE" ? "approved" : "changes requested"}` : "";
-    agents.push({
-      attemptId: a.id,
-      jobId: job.id,
-      jobTitle: job.title,
-      floor: a.worker,
-      desk,
-      visiting,
-      role: a.role ?? "",
-      roleTitle: role?.title ?? a.role ?? "Agent",
-      department: role?.department ?? "",
-      harness: { provider: a.provider ?? "", ...harness },
-      model: a.model ?? "default model",
-      kits: (a.kits ? (JSON.parse(a.kits) as string[]) : []).map((k) => kits.get(k) ?? { name: k, title: k, widget: "toolbox" }),
-      pose,
-      bubble,
-      status: STATUS[pose] + verdict,
-      doing: pose === "working" ? doingLine(input.activity[a.id]) : null,
-      look: hash(a.id),
-    });
+    agents.push(o.make(desk));
   }
 
   const wall: Scene["wall"] = {};
   for (const c of input.cards) (wall[c.column] ??= []).push({ id: c.id, title: c.title, role: c.role, project: c.project });
 
+  const toReview: Scene["toReview"] = [];
+  for (const job of input.jobs) {
+    const a = job.attempts.at(-1);
+    if (!a || a.state !== "result_available" || job.kind !== "work" || job.milestone) continue;
+    const member = a.staff ? staffBy.get(a.staff) : undefined;
+    toReview.push({
+      attemptId: a.id,
+      jobId: job.id,
+      jobTitle: job.title,
+      name: member?.displayName ?? a.staff ?? null,
+      roleTitle: roles.get(a.role ?? "")?.title ?? a.role ?? "Agent",
+    });
+  }
+
   return {
     floors: input.workers.map((w) => ({ worker: w.name, online: w.online, local: w.local, error: w.error, desks: DESKS_PER_FLOOR })),
     agents,
+    toReview,
     wall,
     seats,
   };
@@ -258,4 +377,5 @@ const STATUS: Record<Pose, string> = {
   failed: "failed",
   preparing: "getting ready",
   offline: "machine unreachable",
+  idle: "free: give me a job",
 };

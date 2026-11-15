@@ -221,27 +221,51 @@ async function run(flags: string[]) {
   };
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () => stopAll(0));
 
+  const t3Log = join(STATE_DIR, "t3.log");
+  let ownT3: ChildProcess | null = null;
+  const startT3 = () => {
+    const fd = openSync(t3Log, "a");
+    ownT3 = spawn(t3(), ["serve", "--host", T3_HOST, "--port", String(T3_PORT), "--no-browser"], {
+      cwd: homedir(),
+      stdio: ["ignore", fd, fd],
+      windowsHide: true,
+    });
+    children.push(ownT3);
+    writeRun(children);
+  };
   if (await up(T3_URL)) {
-    say(dim(`T3 is already running on ${T3_URL}`));
+    say(dim(`T3 is already running on ${T3_URL} (if it stops, Studio starts its own)`));
   } else {
-    const log = join(STATE_DIR, "t3.log");
-    say(`Starting T3 on ${T3_URL} ${dim(`(log: ${log})`)}`);
-    const fd = openSync(log, "a");
-    children.push(
-      spawn(t3(), ["serve", "--host", T3_HOST, "--port", String(T3_PORT), "--no-browser"], {
-        cwd: homedir(),
-        stdio: ["ignore", fd, fd],
-        windowsHide: true,
-      }),
-    );
+    say(`Starting T3 on ${T3_URL} ${dim(`(log: ${t3Log})`)}`);
+    startT3();
     if (!(await waitFor(T3_URL, 60))) {
-      console.error(red(`T3 didn't start; see ${log}`));
+      console.error(red(`T3 didn't start; see ${t3Log}`));
       stopAll(1);
     }
   }
+  // Keep a T3 on the port for as long as Studio runs: the one started here, or one you started
+  // yourself (the T3 app, say). When none answers, start ours. A T3 that keeps dying is retried
+  // less and less often, so a broken install doesn't spin.
+  let backoff = 0;
+  let nextTry = 0;
+  const watchT3 = async () => {
+    if (Date.now() < nextTry || (await up(T3_URL))) return;
+    const alive = ownT3 !== null && (ownT3 as ChildProcess).exitCode === null;
+    if (alive) return; // ours is still starting up
+    say(yellow(`T3 stopped answering on ${T3_URL}; starting it again ${dim(`(log: ${t3Log})`)}`));
+    startT3();
+    if (await waitFor(T3_URL, 60)) backoff = 0;
+    else backoff = Math.min(backoff * 2 || 30_000, 10 * 60_000);
+    nextTry = Date.now() + backoff;
+  };
+  let watching = false;
+  setInterval(() => {
+    if (watching) return;
+    watching = true;
+    void watchT3().finally(() => (watching = false));
+  }, 10_000);
   if (SUPPORT) {
     writeRun(children);
-    children[0]?.on("exit", (code) => stopAll(code ?? 1));
     say(`This machine is a worker for the main Studio.${background ? "" : dim("  (Ctrl+C stops T3 here)")}`);
     return showMain(browser);
   }

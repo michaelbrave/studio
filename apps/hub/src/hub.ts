@@ -22,7 +22,9 @@ import { BriefLog, briefDue, composeBrief, dayKey, type LogRow } from "./brief.t
 import { parseHandoff, sameCommit } from "./handoff.ts";
 import { Notifier, type AttemptView, type NotifyConfig } from "./notify.ts";
 import { deliverKitRemote } from "./remoteKit.ts";
-import { t3WorkerPort } from "./t3Worker.ts";
+import { Staff, discoverAgents, discoverTools, type HireInput } from "./staff.ts";
+import { sameFolder } from "./desk.ts";
+import { listProjects, readTail, t3WorkerPort } from "./t3Worker.ts";
 import type { Vault } from "./vault.ts";
 import { Workflow } from "./workflow.ts";
 
@@ -48,14 +50,32 @@ export interface WorkerConn {
   t3?: T3Worker;
   error?: string;
   models: Record<string, string[]>;
+  /** T3's id for this machine; with the worker's address it makes links into T3's own UI. */
+  environmentId?: string;
 }
+
+/** A plan's usage window as T3 reads it from the provider (session, weekly...). */
+export interface UsageWindow {
+  label: string;
+  kind: string;
+  usedPercent: number;
+  resetsAt: string | null;
+}
+
+/** Attempt states in which the agent is still on the job. */
+export const ACTIVE_STATES = ["queued", "preparing", "running", "awaiting_input", "capacity_paused", "status_unknown"] as const;
 
 export class Hub {
   readonly db: DatabaseSync;
   readonly dispatcher: Dispatcher;
   readonly workflow: Workflow;
-  readonly rolesDir: string;
-  readonly kitsDir: string;
+  /** Built-in Roles and Kits first, then the ones made in Studio (STUDIO_HOME). */
+  readonly rolesDirs: string[];
+  readonly kitsDirs: string[];
+  /** The Studio chat's folder (desk.ts); its T3 project is hidden from project lists. */
+  deskDir: string | null = null;
+  /** Hired agents; null when the hub has no home folder to keep them in (tests). */
+  readonly staff: Staff | null;
   readonly workers = new Map<string, WorkerConn>();
   /** Latest visible activity per running Attempt, refreshed each tick (for the studio view). */
   private readonly activity: Record<string, { kind: string; title: string | null }> = {};
@@ -66,11 +86,14 @@ export class Hub {
   private readonly briefs: BriefLog;
   /** Machine liveness for notifications, checked every 30 s (the page checks its own on each poll). */
   private liveness: { at: number; workers: Array<{ name: string; online: boolean }> } = { at: 0, workers: [] };
+  /** Plan usage per harness, read from each machine's T3 at most once a minute. */
+  private usageCache: { at: number; data: UsageReport } | null = null;
 
-  constructor(db: DatabaseSync, dirs: { roles: string; kits: string }, vault: Vault, notify: NotifyConfig | null = null) {
+  constructor(db: DatabaseSync, dirs: { roles: string; kits: string; home?: string }, vault: Vault, notify: NotifyConfig | null = null) {
     this.db = db;
-    this.rolesDir = dirs.roles;
-    this.kitsDir = dirs.kits;
+    this.staff = dirs.home ? new Staff(dirs.home, { roles: dirs.roles, kits: dirs.kits }) : null;
+    this.rolesDirs = this.staff ? [dirs.roles, this.staff.rolesDir] : [dirs.roles];
+    this.kitsDirs = this.staff ? [dirs.kits, this.staff.kitsDir] : [dirs.kits];
     this.dispatcher = new Dispatcher(db, { workers: this.ports });
     this.workflow = new Workflow(this, vault);
     this.notifier = new Notifier(db, notify);
@@ -104,10 +127,34 @@ export class Hub {
       );
       for (const p of caps.providers) conn.models[p.providerInstanceId] = p.models.map((m) => (typeof m === "string" ? m : m.id));
       this.ports[name] = t3WorkerPort(conn.t3);
+      conn.environmentId = await conn.t3
+        .call<{ environmentId?: string }>("t3_environment_read")
+        .then((e) => e.environmentId, () => undefined);
     } catch (e) {
       conn.error = (e as Error).message;
     }
     return conn;
+  }
+
+  /** Where a thread opens in T3's own web UI (the same page T3 shows), or null if unknown. */
+  threadUrl(worker: string, threadId: string | null): string | null {
+    const conn = this.workers.get(worker);
+    if (!conn?.environmentId || !threadId) return null;
+    return `${new URL(conn.url).origin}/${encodeURIComponent(conn.environmentId)}/${encodeURIComponent(threadId)}`;
+  }
+
+  /** Hired staff with a job on right now. */
+  busyStaff(): Set<string> {
+    const marks = ACTIVE_STATES.map(() => "?").join(", ");
+    const rows = this.db.prepare(`SELECT DISTINCT staff FROM attempts WHERE staff IS NOT NULL AND state IN (${marks})`).all(...ACTIVE_STATES) as Array<{ staff: string }>;
+    return new Set(rows.map((r) => r.staff));
+  }
+
+  /** A hired staff member in this role with no job on, if there is one: they get the work before anyone new. */
+  async freeStaff(role: string, prefer: (m: { runtime: Provider; worker: string }) => boolean = () => true) {
+    const busy = this.busyStaff();
+    const free = ((await this.staff?.list()) ?? []).filter((m) => m.role === role && !busy.has(m.name));
+    return free.find(prefer) ?? free[0] ?? null;
   }
 
   t3(name: string): T3Worker {
@@ -116,16 +163,43 @@ export class Hub {
     return conn.t3;
   }
 
-  private async subdirs(dir: string): Promise<string[]> {
-    return (await readdir(dir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  /** Each named folder once, from the first of `dirs` that has it; `custom` is true outside the repo. */
+  private async folders(dirs: string[]): Promise<Array<{ path: string; custom: boolean }>> {
+    const seen = new Set<string>();
+    const out: Array<{ path: string; custom: boolean }> = [];
+    for (const [i, dir] of dirs.entries()) {
+      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const n of entries.filter((d) => d.isDirectory()).map((d) => d.name).sort()) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        out.push({ path: join(dir, n), custom: i > 0 });
+      }
+    }
+    return out;
   }
 
   /** Roles and Kits as the UI shows them: hats, and the widgets that go on desks. */
   async catalog() {
-    const roles = await Promise.all((await this.subdirs(this.rolesDir)).map((n) => loadRole(join(this.rolesDir, n))));
-    const kits = await Promise.all((await this.subdirs(this.kitsDir)).map((n) => loadKit(join(this.kitsDir, n))));
+    // A Role or Kit you made that no longer loads is left out rather than breaking the whole page.
+    const load = async <T extends object>(dirs: string[], fn: (p: string) => Promise<T>) =>
+      (
+        await Promise.all(
+          (await this.folders(dirs)).map(async (f) => {
+            try {
+              return { ...(await fn(f.path)), custom: f.custom };
+            } catch (e) {
+              if (!f.custom) throw e;
+              console.error(`skipping ${f.path}: ${(e as Error).message}`);
+              return null;
+            }
+          }),
+        )
+      ).filter((x) => x !== null);
+    const roles = await load(this.rolesDirs, loadRole);
+    const kits = await load(this.kitsDirs, loadKit);
     return {
-      roles: roles.map(({ manifest: r }) => ({
+      roles: roles.map(({ manifest: r, custom }) => ({
+        custom,
         name: r.name,
         title: r.title,
         department: r.department,
@@ -136,7 +210,9 @@ export class Hub {
         model: r.model.default ?? null,
         kits: r.kits,
       })),
-      kits: kits.map(({ manifest: k }) => ({
+      kits: kits.map(({ manifest: k, mcpServers, custom }) => ({
+        custom,
+        mcp: Object.keys(mcpServers),
         name: k.name,
         title: k.title,
         description: k.description,
@@ -152,12 +228,14 @@ export class Hub {
       [...this.workers.values()].map(async (w) => {
         if (!w.t3) await this.connect(w.name); // retry workers that were down
         const conn = this.workers.get(w.name)!;
-        let projects: Array<{ id: string; title: string; workspaceRoot: string }> = [];
+        let projects: Array<{ id: string; title: string; workspaceRoot: string; desk?: boolean }> = [];
         let error = conn.error ?? null;
         if (conn.t3) {
           // The project list doubles as the liveness check: a worker is online if it answers.
           try {
-            projects = (await conn.t3.call<{ projects: typeof projects }>("t3_project_list")).projects;
+            projects = await listProjects<(typeof projects)[number]>(conn.t3);
+            const desk = this.deskDir;
+            if (conn.local && desk) projects = projects.map((p) => (sameFolder(p.workspaceRoot, desk) ? { ...p, desk: true } : p));
           } catch (e) {
             error = (e as Error).message;
           }
@@ -178,7 +256,11 @@ export class Hub {
     const jobs = this.db.prepare("SELECT * FROM jobs ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
     const attempts = this.db.prepare("SELECT * FROM attempts ORDER BY created_at").all() as unknown as Attempt[];
     const catalog = await this.catalog();
-    const jobsWithAttempts = jobs.map((j) => ({ ...j, attempts: attempts.filter((a) => a.job_id === j.id) }));
+    const staff = (await this.staff?.list()) ?? [];
+    const jobsWithAttempts = jobs.map((j) => ({
+      ...j,
+      attempts: attempts.filter((a) => a.job_id === j.id).map((a) => ({ ...a, t3_url: this.threadUrl(a.worker, a.thread_id) })),
+    }));
     const cards = await this.workflow.board.list();
     const scene = buildScene(
       {
@@ -190,6 +272,7 @@ export class Hub {
         jobs: jobsWithAttempts as never,
         cards,
         activity: this.activity,
+        staff,
       },
       this.seats,
     );
@@ -197,6 +280,7 @@ export class Hub {
     return {
       workers,
       ...catalog,
+      staff,
       jobs: jobsWithAttempts,
       cards,
       ratings: this.workflow.ratedAttempts(),
@@ -212,14 +296,15 @@ export class Hub {
   }
 
   /** What a loadout would do on a runtime: the compiler's capability report, before any job exists. */
-  async preview(input: { role: string; kits?: string[]; provider: Provider }) {
+  async preview(input: { role?: string; kits?: string[]; provider?: Provider; staff?: string }) {
+    const member = input.staff ? await this.getStaff(input.staff) : null;
     const loadout = await loadLoadout({
-      rolesDir: this.rolesDir,
-      kitsDir: this.kitsDir,
-      role: input.role,
-      ...(input.kits ? { kits: input.kits } : {}),
+      rolesDir: this.rolesDirs,
+      kitsDir: this.kitsDirs,
+      role: member?.role ?? input.role ?? "",
+      ...(member ? { kits: member.kits, anyKits: true } : input.kits ? { kits: input.kits } : {}),
     });
-    const result = compileLoadout({ loadout, provider: input.provider, existing: () => undefined });
+    const result = compileLoadout({ loadout, provider: input.provider ?? member?.runtime ?? "claude", existing: () => undefined });
     return { launchable: result.launchable, runtimeMode: result.runtimeMode, report: result.report };
   }
 
@@ -229,10 +314,12 @@ export class Hub {
     project: string;
     title: string;
     brief: string;
-    role: string;
+    role?: string;
     /** Kits to equip; omitted means the role's defaults. */
     kits?: string[];
-    provider: Provider;
+    provider?: Provider;
+    /** A hired staff member to do the job: its Role, Kits, harness, model and soul. */
+    staff?: string;
     /** Branch or commit the Attempt's worktree starts from; the project's HEAD when omitted. */
     baseRef?: string;
     /** Makes this Job a cross-check of that Attempt. */
@@ -244,31 +331,40 @@ export class Hub {
     targetJob?: string;
     /** "root" runs in the project's own checkout, with no Kit files written there. */
     workspace?: "worktree" | "root";
-    /** The board card this Job works on. */
+    /** The board card this Job works on. Work Jobs without one get a card of their own. */
     card?: string;
+    /** Who asked for it, for the card ("you", "the Studio Manager"). */
+    by?: string;
   }) {
+    const member = input.staff ? await this.getStaff(input.staff) : null;
+    const role = member?.role ?? input.role;
+    if (!role) throw new Error("pick an agent or a role for the job");
+    const provider: Provider = input.provider ?? member?.runtime ?? "claude";
     const loadout = await loadLoadout({
-      rolesDir: this.rolesDir,
-      kitsDir: this.kitsDir,
-      role: input.role,
-      ...(input.kits ? { kits: input.kits } : {}),
+      rolesDir: this.rolesDirs,
+      kitsDir: this.kitsDirs,
+      role,
+      ...(member ? { kits: member.kits, anyKits: true } : input.kits ? { kits: input.kits } : {}),
     });
+    const staff = member ? { name: member.displayName, soulOverride: await this.staff!.soulOverride(member) } : undefined;
     const conn = this.workers.get(input.worker);
     if (!conn?.t3) throw new Error(`worker ${input.worker} is offline`);
     const t3 = conn.t3;
     if (!conn.local && !t3.rpc) throw new Error(`worker ${input.worker} was paired without RPC access; pair it again`);
-    const projects = (await t3.call<{ projects: Array<{ id: string }> }>("t3_project_list")).projects;
+    const projects = await listProjects<{ id: string }>(t3);
     if (!projects.some((p) => p.id === input.project)) throw new Error(`project ${input.project} not found on ${input.worker}`);
 
     // Check the loadout can be enforced on this runtime before anything is created.
-    const dry = compileLoadout({ loadout, provider: input.provider, existing: () => undefined });
+    const dry = compileLoadout({ loadout, provider, existing: () => undefined });
     if (!dry.launchable) {
       const why = dry.report.filter((r) => r.status === "unsupported").map((r) => r.reason);
-      throw new Error(`${loadout.role.manifest.title} cannot run on ${input.provider}: ${why.join("; ")}`);
+      throw new Error(`${loadout.role.manifest.title} cannot run on ${provider}: ${why.join("; ")}`);
     }
 
-    const instanceId = INSTANCE[input.provider];
-    const model = dry.model ?? conn.models[instanceId]?.[0] ?? null;
+    const instanceId = INSTANCE[provider];
+    // A staff member's model only applies on its own harness; elsewhere the Role's or T3's default.
+    const staffModel = member && member.runtime === provider ? member.model : null;
+    const model = staffModel ?? dry.model ?? conn.models[instanceId]?.[0] ?? null;
     const memoryBrief = input.workspace === "root" ? "" : await this.workflow.memoryBrief(input.worker, input.project, loadout.role.manifest);
     const jobId = this.dispatcher.createJob({
       project: input.project,
@@ -279,13 +375,29 @@ export class Hub {
       ...(input.targetJob ? { targetJob: input.targetJob } : {}),
       ...(input.autoReview === false ? { autoReview: false } : {}),
     });
-    if (input.card) await this.workflow.linkCard(input.card, jobId);
+    // Every piece of work is on the board, whoever started it, so the board shows what is going on.
+    let card = input.card;
+    if (!card && (input.kind ?? "work") === "work" && !input.reviewsAttempt) {
+      card = (
+        await this.workflow.board.create({
+          title: input.title,
+          project: `${input.worker}/${input.project}`,
+          role,
+          priority: "normal",
+          column: "doing",
+          createdBy: input.by ?? "you",
+          body: input.brief,
+        })
+      ).id;
+    }
+    if (card) await this.workflow.linkCard(card, jobId);
     const attemptId = this.dispatcher.createAttempt(jobId, input.worker, {
       role: loadout.role.manifest.name,
       kits: loadout.kits.map((k) => k.manifest.name),
-      provider: input.provider,
+      provider,
       model,
       snapshot: loadout.snapshot,
+      staff: member?.name ?? null,
     });
 
     const setup: LaunchSetup = {
@@ -298,18 +410,7 @@ export class Hub {
           { workspace: "root" as const }
         : {
             prepare: async (worktree: string) => {
-              if (conn.local) {
-                // Compile against the real worktree so tracked project files are respected.
-                const result = compileLoadout({
-                  loadout,
-                  provider: input.provider,
-                  existing: await scanWorktree(worktree),
-                  memoryBrief,
-                });
-                await applyOverlay(worktree, result, loadout.snapshot);
-              } else {
-                await deliverKitRemote({ rpc: t3.rpc!, worktree, loadout, provider: input.provider, memoryBrief });
-              }
+              await this.deliverKit(conn, { loadout, provider, memoryBrief, staff, worktree });
               this.db.prepare("UPDATE attempts SET worktree_path = ? WHERE id = ?").run(worktree, attemptId);
             },
           }),
@@ -318,35 +419,186 @@ export class Hub {
     return { jobId, attemptId };
   }
 
+  /** Write the Role and Kits into a worktree, in the harness's own format. */
+  private async deliverKit(
+    conn: WorkerConn,
+    k: {
+      loadout: Awaited<ReturnType<typeof loadLoadout>>;
+      provider: Provider;
+      memoryBrief: string;
+      staff: { name: string; soulOverride?: string | undefined } | undefined;
+      worktree: string;
+    },
+  ) {
+    if (conn.local) {
+      // Compile against the real worktree so tracked project files are respected.
+      const result = compileLoadout({
+        loadout: k.loadout,
+        provider: k.provider,
+        existing: await scanWorktree(k.worktree),
+        memoryBrief: k.memoryBrief,
+        ...(k.staff ? { staff: k.staff } : {}),
+      });
+      await applyOverlay(k.worktree, result, k.loadout.snapshot);
+    } else {
+      await deliverKitRemote({
+        rpc: conn.t3!.rpc!,
+        worktree: k.worktree,
+        loadout: k.loadout,
+        provider: k.provider,
+        memoryBrief: k.memoryBrief,
+        ...(k.staff ? { staff: k.staff } : {}),
+      });
+    }
+  }
+
+  /**
+   * Put a failed or stopped agent back to work in the same thread and worktree, e.g. after a
+   * subscription limit. Its Kit goes back in (it was removed when the job ended), and it is told
+   * to carry on where it stopped. The Attempt is watched again from here.
+   */
+  async restart(attemptId: string, note?: string) {
+    const a = this.dispatcher.get(attemptId);
+    if (!["failed", "stopped", "status_unknown"].includes(a.state)) throw new Error(`this agent is ${a.state.replace("_", " ")}, not stopped or failed`);
+    if (!a.thread_id) throw new Error("this attempt never started a thread; start the job again instead");
+    const conn = this.workers.get(a.worker);
+    if (!conn?.t3) throw new Error(`computer ${a.worker} is offline`);
+    if (!conn.local && !conn.t3.rpc) throw new Error(`computer ${a.worker} was paired without RPC access; pair it again`);
+    const job = this.db.prepare("SELECT * FROM jobs WHERE id = ?").get(a.job_id) as unknown as Job;
+    if (job.kind !== "integration" && a.role && !a.worktree_path) {
+      const { thread } = await conn.t3.call<{ thread: { worktreePath: string | null } }>("t3_thread_read", { threadId: a.thread_id, limit: 1 });
+      if (thread.worktreePath) {
+        const member = a.staff ? await this.staff?.get(a.staff).catch(() => null) : null;
+        const loadout = await loadLoadout({
+          rolesDir: this.rolesDirs,
+          kitsDir: this.kitsDirs,
+          role: a.role,
+          kits: a.kits ? (JSON.parse(a.kits) as string[]) : [],
+          anyKits: true,
+        });
+        const staff = member ? { name: member.displayName, soulOverride: await this.staff!.soulOverride(member) } : undefined;
+        const memoryBrief = await this.workflow.memoryBrief(a.worker, job.project, loadout.role.manifest);
+        await this.deliverKit(conn, { loadout, provider: a.provider as Provider, memoryBrief, staff, worktree: thread.worktreePath });
+        this.db.prepare("UPDATE attempts SET worktree_path = ? WHERE id = ?").run(thread.worktreePath, a.id);
+      }
+    }
+    const n = (this.db.prepare("SELECT COUNT(*) AS n FROM attempt_log WHERE attempt_id = ? AND reason LIKE 'restarted%'").get(a.id) as { n: number }).n;
+    await conn.t3.call("t3_thread_send", {
+      threadId: a.thread_id,
+      message: [
+        "You stopped before finishing this job (it may have been a usage limit or an error).",
+        "Carry on from where you left off: check what is already done in this worktree, finish the brief, and end with the handoff as instructed.",
+        note ? `A note from the user: ${note}` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      clientRequestId: `${a.id}-restart-${n + 1}`,
+    });
+    const after = await conn.t3.call<{ thread: { updatedAt: string } }>("t3_thread_read", { threadId: a.thread_id, limit: 1 });
+    this.dispatcher.reopen(a.id, `restarted by you${note ? `: ${note}` : ""}`, Date.parse(after.thread.updatedAt));
+    return this.dispatcher.get(a.id);
+  }
+
+  /** How much of each harness's plan is used: T3 reads the providers' own limits (session, weekly). */
+  async usage(): Promise<UsageReport> {
+    if (this.usageCache && Date.now() - this.usageCache.at < 60_000) return this.usageCache.data;
+    const data = await this.readUsage();
+    this.usageCache = { at: Date.now(), data };
+    return data;
+  }
+
+  private async readUsage(): Promise<UsageReport> {
+    type Limits = { checkedAt: string; credentialFingerprint?: string; windows: Array<UsageWindow & { resetsAt?: string }>; unavailable?: { reason: string } };
+    const out: UsageReport = [];
+    const seen = new Set<string>();
+    for (const conn of this.workers.values()) {
+      if (!conn.t3?.rpc) continue;
+      const config = await conn.t3.rpc
+        .call<{ providers?: Array<{ instanceId?: string; providerInstanceId?: string; usageLimits?: Limits }> }>("server.getConfig", {})
+        .catch(() => null);
+      for (const p of config?.providers ?? []) {
+        const id = p.instanceId ?? p.providerInstanceId;
+        const harness = (Object.keys(INSTANCE) as Provider[]).find((k) => INSTANCE[k] === id);
+        const limits = p.usageLimits;
+        if (!harness || !limits || limits.unavailable || !limits.windows.length) continue;
+        // The same account signed in on two machines is one plan; show it once.
+        const key = `${harness}|${limits.credentialFingerprint ?? conn.name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          harness,
+          label: HARNESSES[harness].label,
+          color: HARNESSES[harness].color,
+          worker: conn.name,
+          windows: limits.windows.map((w) => ({ label: w.label, kind: w.kind, usedPercent: w.usedPercent, resetsAt: w.resetsAt ?? null })),
+          checkedAt: limits.checkedAt,
+        });
+      }
+    }
+    return out;
+  }
+
+  private async getStaff(name: string) {
+    if (!this.staff) throw new Error("this hub has no staff");
+    return this.staff.get(name);
+  }
+
+  /** What the hire wizard offers: souls, tools found on this computer, and agents to import. */
+  async hireOptions() {
+    const [souls, tools, agents] = await Promise.all([this.staff?.souls() ?? [], discoverTools(), discoverAgents()]);
+    return {
+      souls,
+      // Never send MCP env or headers to the browser: they may hold tokens.
+      mcp: tools.mcp.map(({ name, source, summary }) => ({ name, source, summary })),
+      skills: tools.skills.map(({ name, description, source }) => ({ name, description, source })),
+      agents,
+    };
+  }
+
+  async hire(input: HireInput) {
+    if (!this.staff) throw new Error("this hub has no staff folder");
+    const { roles, kits } = await this.catalog();
+    return this.staff.hire(input, { roles: roles.map((r) => r.name), kits: kits.map((k) => k.name), workers: [...this.workers.keys()] });
+  }
+
+  async fire(name: string) {
+    await this.getStaff(name);
+    const busy = this.db
+      .prepare(`SELECT 1 FROM attempts WHERE staff = ? AND state NOT IN ('stopped', 'failed', 'result_available')`)
+      .get(name);
+    if (busy) throw new Error("this agent is still on a job; cancel it first");
+    await this.staff!.fire(name);
+  }
+
   async cancel(attemptId: string) {
     return this.dispatcher.cancel(attemptId);
   }
 
   /** Attempt detail for the UI: state history, the thread's recent activity, and open requests. */
-  async attempt(attemptId: string) {
-    const a = this.dispatcher.get(attemptId);
+  async attempt(attemptId: string, opts: { seen?: boolean } = {}) {
+    let a = this.dispatcher.get(attemptId);
+    // You opened a finished agent's work: it can go back to its desk (packages/sim, "settled").
+    if (opts.seen && TERMINAL_STATES.has(a.state) && a.seen_at === null) {
+      this.db.prepare("UPDATE attempts SET seen_at = ? WHERE id = ?").run(Date.now(), a.id);
+      a = this.dispatcher.get(attemptId);
+    }
     let messages: Array<{ type: string; text: string | null; title: string | null; status: string; by: string | null; at: string }> = [];
     let requests: Array<{ id: string; kind: string; summary: string }> = [];
     if (a.thread_id && this.workers.get(a.worker)?.t3) {
-      const read = await this.t3(a.worker)
-        .call<{ items: Array<{ type: string; text: string | null; title: string | null; status: string; createdBy: string | null; updatedAt: string }> }>(
-          "t3_thread_read",
-          { threadId: a.thread_id, view: "activity", limit: 50, maxCharsPerItem: 4_000 },
-        )
-        .catch(() => ({ items: [] }));
+      const read = await readTail(this.t3(a.worker), a.thread_id, { view: "activity", last: 60, maxCharsPerItem: 4_000 }).catch(() => ({ items: [] }));
       messages = read.items.map((i) => ({ type: i.type, text: i.text, title: i.title, status: i.status, by: i.createdBy, at: i.updatedAt }));
-      if (a.state === "awaiting_input") requests = await this.openRequests(a, messages);
+      if (a.state === "awaiting_input") requests = await this.openRequests(a.worker, a.thread_id, messages);
     }
-    return { attempt: a, history: this.dispatcher.history(attemptId), messages, requests };
+    return { attempt: a, history: this.dispatcher.history(attemptId), messages, requests, t3Url: this.threadUrl(a.worker, a.thread_id) };
   }
 
   /** Approvals and questions the agent is blocked on. Read over RPC: MCP does not list approvals. */
-  private async openRequests(a: Attempt, items: Array<{ type: string; text: string | null; title: string | null; status: string }>) {
-    const rpc = this.t3(a.worker).rpc;
+  async openRequests(worker: string, threadId: string, items: Array<{ type: string; text: string | null; title: string | null; status: string }>) {
+    const rpc = this.t3(worker).rpc;
     if (!rpc) return [];
     const snap = await rpc
       .get<{ projection: { runtimeRequests: RuntimeRequest[]; turnItems: TurnItem[] } }>(
-        `/api/orchestration/threads/${encodeURIComponent(a.thread_id!)}`,
+        `/api/orchestration/threads/${encodeURIComponent(threadId)}`,
       )
       .catch(() => undefined);
     // The request itself carries no description. The tool call it gates shares its native id and
@@ -519,14 +771,7 @@ export class Hub {
     for (const id of Object.keys(this.activity)) if (!live.has(id)) delete this.activity[id];
     for (const a of running) {
       if (!this.workers.get(a.worker)?.t3) continue;
-      const read = await this.t3(a.worker)
-        .call<{ items: Array<{ type: string; title: string | null; text: string | null }> }>("t3_thread_read", {
-          threadId: a.thread_id,
-          view: "activity",
-          limit: 3,
-          maxCharsPerItem: 200,
-        })
-        .catch(() => undefined);
+      const read = await readTail(this.t3(a.worker), a.thread_id!, { view: "activity", last: 3, maxCharsPerItem: 200 }).catch(() => undefined);
       const item = read?.items.filter((i) => i.type !== "user_message").at(-1);
       if (item) this.activity[a.id] = { kind: item.type, title: item.title ?? item.text?.split("\n")[0] ?? null };
     }
@@ -538,11 +783,13 @@ export class Hub {
       .run(a.id, Date.now(), a.state, a.state, reason);
   }
 
+  /** The thread's branch and worktree, and its newest messages (the agent's final one is last). */
   async readThread(a: Attempt) {
-    return this.t3(a.worker).call<{
-      thread: { branch: string | null; worktreePath: string | null };
-      items: Array<{ type: string; text: string | null }>;
-    }>("t3_thread_read", { threadId: a.thread_id, view: "messages", limit: 20, maxCharsPerItem: 20_000 });
+    return readTail<{ branch: string | null; worktreePath: string | null }>(this.t3(a.worker), a.thread_id!, {
+      view: "messages",
+      last: 20,
+      maxCharsPerItem: 20_000,
+    });
   }
 
   /** Record what each finished agent reported: its final commit and, for reviewers, the verdict. */
@@ -613,7 +860,11 @@ export class Hub {
     // Claude and Codex review each other; OpenCode's work goes to Claude, then Codex.
     const order: Provider[] = a.provider === "claude" ? ["codex", "opencode"] : ["claude", "codex", "opencode"];
     const canRun = (p: Provider) => conn.models[INSTANCE[p]] !== undefined && (conn.local || p !== "codex");
-    const provider: Provider = order.find((p) => p !== a.provider && canRun(p)) ?? (a.provider as Provider);
+    // A hired Code Critic who is free does the review, on another harness when one is hired; only
+    // when no critic is free does Studio bring in someone for this one job.
+    const critic = await this.freeStaff("critic", (m) => m.runtime !== a.provider && canRun(m.runtime));
+    const provider: Provider =
+      critic && canRun(critic.runtime) ? critic.runtime : (order.find((p) => p !== a.provider && canRun(p)) ?? (a.provider as Provider));
 
     const brief = [
       `Cross-check another agent's work. Review the changes on branch \`${thread.branch}\` since it left \`${base}\`` +
@@ -644,12 +895,23 @@ export class Hub {
       brief,
       role: "critic",
       provider,
+      ...(critic && critic.runtime === provider ? { staff: critic.name } : {}),
       baseRef: thread.branch,
       reviewsAttempt: a.id,
     });
     this.note(a, `cross-check started on ${HARNESSES[provider].label} (${attemptId})`);
   }
 }
+
+export type UsageReport = Array<{
+  harness: Provider;
+  label: string;
+  color: string;
+  /** The machine it was read on. */
+  worker: string;
+  windows: UsageWindow[];
+  checkedAt: string | null;
+}>;
 
 interface RuntimeRequest {
   id: string;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildScene, bubbleFor, LINGER_MS, type SceneInput } from "../src/index.ts";
+import { buildScene, bubbleFor, LINGER_MS, REVIEW_WAIT_MS, type SceneInput } from "../src/index.ts";
 
 const NOW = 10_000_000;
 
@@ -110,13 +110,40 @@ test("a reviewer stands at the desk of the work it reviews; a producer at the wa
   assert.deepEqual(scene.agents.find((x) => x.role === "producer")!.visiting, { place: "board" });
 });
 
-test("finished agents go home after a while, but results waiting for you stay", () => {
-  const old = { last_observed_at: NOW - LINGER_MS - 1 };
-  const failed = job("failed", {}, old);
-  const waitingForYou = job("result_available", {}, old);
-  const accepted = job("result_available", { milestone: "accepted" }, old);
-  const scene = buildScene(input([failed, waitingForYou, accepted]));
-  assert.deepEqual(scene.agents.map((a) => a.jobId), [waitingForYou.id]);
+test("work you have decided on goes home at once; results and failures wait for you", () => {
+  const recent = { last_observed_at: NOW - LINGER_MS - 1 };
+  const failed = job("failed", {}, recent);
+  const waitingForYou = job("result_available", {}, recent);
+  const accepted = job("result_available", { milestone: "accepted" }, { last_observed_at: NOW - 1000 });
+  const stopped = job("stopped", {}, { last_observed_at: NOW - 1000 });
+  const scene = buildScene(input([failed, waitingForYou, accepted, stopped]));
+  assert.deepEqual(scene.agents.map((a) => a.jobId).sort(), [failed.id, waitingForYou.id].sort());
+});
+
+test("opening a result, or enough time, lets its agent move on; it stays on the to-review list", () => {
+  const seen = job("result_available", {}, { seen_at: NOW - 10 });
+  const old = job("result_available", {}, { last_observed_at: NOW - REVIEW_WAIT_MS - 1 });
+  const oldFail = job("failed", {}, { last_observed_at: NOW - REVIEW_WAIT_MS - 1 });
+  const scene = buildScene(input([seen, old, oldFail]));
+  assert.deepEqual(scene.agents, []);
+  assert.deepEqual(scene.toReview.map((r) => r.jobId).sort(), [seen.id, old.id].sort());
+});
+
+test("a hired agent is free again as soon as you accept its work", () => {
+  const accepted = job("result_available", { milestone: "accepted" }, { staff: "ada" });
+  const scene = buildScene(input([accepted], { staff: [ADA] }));
+  assert.equal(scene.agents.length, 1);
+  assert.equal(scene.agents[0]!.pose, "idle");
+  assert.deepEqual(scene.toReview, []);
+});
+
+test("a cross-check says what it found, not that it waits for your review, and leaves after a while", () => {
+  const review = job("result_available", { kind: "review" }, { role: "critic", verdict: "APPROVE" });
+  const scene = buildScene(input([review]));
+  assert.equal(scene.agents[0]!.status, "cross-check done: approved");
+  assert.deepEqual(scene.toReview, []);
+  const later = job("result_available", { kind: "review" }, { role: "critic", last_observed_at: NOW - LINGER_MS - 1 });
+  assert.deepEqual(buildScene(input([later])).agents, []);
 });
 
 test("cards are pinned to the wall by column", () => {
@@ -147,4 +174,35 @@ test("a working agent shows its latest activity line; other states show none", (
   assert.equal(a!.doing!.length, 60);
   assert.equal(b!.doing, null);
   assert.equal(buildScene(input([job("running")])).agents[0]!.doing, null);
+});
+
+const ADA = { name: "ada", displayName: "Ada", role: "engineer", worker: "local", runtime: "claude", model: "claude-opus-5-5", kits: ["guardrails"] };
+
+test("a hired agent with no job sits at a desk, free, under its own name", () => {
+  const scene = buildScene(input([], { staff: [ADA] }));
+  const [a] = scene.agents;
+  assert.equal(a!.attemptId, "staff:ada");
+  assert.equal(a!.name, "Ada");
+  assert.equal(a!.pose, "idle");
+  assert.equal(a!.bubble, null);
+  assert.equal(a!.desk, 0);
+  assert.equal(a!.roleTitle, "Software Engineer");
+});
+
+test("a hired agent keeps its desk and looks when it takes a job", () => {
+  const idle = buildScene(input([], { staff: [ADA] }));
+  const other = job("running");
+  const working = buildScene(input([other, job("running", {}, { staff: "ada" })], { staff: [ADA] }), { ...idle.seats });
+  const ada = working.agents.find((a) => a.staff === "ada")!;
+  const idleAda = idle.agents[0]!;
+  assert.notEqual(ada.attemptId, "staff:ada");
+  assert.equal(ada.pose, "working");
+  assert.equal(ada.desk, idleAda.desk);
+  assert.equal(ada.look, idleAda.look);
+  assert.equal(working.agents.filter((a) => a.staff === "ada").length, 1); // not also idle
+});
+
+test("an idle agent on a machine that is down shows as offline", () => {
+  const scene = buildScene(input([], { staff: [ADA], workers: [{ name: "local", online: false, error: "down", local: true }] }));
+  assert.equal(scene.agents[0]!.pose, "offline");
 });

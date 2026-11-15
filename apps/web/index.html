@@ -16,21 +16,29 @@
 <main>
   <aside>
     <section>
-      <h2>Workers</h2>
+      <h2>Staff</h2>
+      <ul id="staff" class="list staff-list"></ul>
+      <ul id="guests" class="list staff-list guests" hidden></ul>
+      <button type="button" id="hire-button" class="hire-button">+ Hire an agent</button>
+    </section>
+
+    <details class="side-section" id="computers-box">
+      <summary><h2>Computers</h2> <span id="workers-summary" class="muted small"></span></summary>
       <ul id="workers" class="list"></ul>
       <details>
-        <summary>Add a worker</summary>
+        <summary>Connect a computer</summary>
+        <p class="muted small">A computer running T3 that agents can work on. On it, run <code>t3 serve --host 0.0.0.0 --port 3773</code> and copy the pairing code it prints (or install Studio there and run <code>studio join</code>).</p>
         <form id="pair-form" class="stack">
           <input name="name" placeholder="name, e.g. desktop" required pattern="[a-z0-9][a-z0-9-]*" />
           <input name="url" placeholder="address, e.g. 192.168.1.50:3773" required />
           <input name="code" placeholder="pairing code (t3 auth pairing create)" required />
-          <button>Pair</button>
+          <button>Connect</button>
         </form>
       </details>
-    </section>
+    </details>
 
-    <section>
-      <h2>Projects</h2>
+    <details class="side-section" id="projects-box" open>
+      <summary><h2>Projects</h2> <span id="projects-summary" class="muted small"></span></summary>
       <ul id="projects" class="list"></ul>
       <details>
         <summary>New project</summary>
@@ -41,15 +49,10 @@
           <button>Create</button>
         </form>
       </details>
-    </section>
+    </details>
   </aside>
 
   <section id="center">
-    <div id="inbox" class="card inbox" hidden>
-      <h2>Needs you</h2>
-      <div id="inbox-items"></div>
-    </div>
-
     <nav class="tabs">
       <button type="button" data-view="office" class="tab active">Studio</button>
       <button type="button" data-view="board" class="tab">Board</button>
@@ -96,6 +99,9 @@
         <div class="stack">
           <div class="row">
             <label>Project <select name="project" required></select></label>
+            <label>Who <select name="staff"></select></label>
+          </div>
+          <div class="row" id="role-row">
             <label>Role <select name="role" required></select></label>
             <label>Runtime <select name="provider" required></select></label>
           </div>
@@ -119,13 +125,16 @@
     </div>
   </section>
 
-  <section id="detail" hidden>
+  <section id="staff-panel" class="side" hidden></section>
+
+  <section id="detail" class="side" hidden>
     <div class="detail-head">
       <h2 id="detail-title"></h2>
       <button id="close-detail" class="ghost" title="Close">✕</button>
     </div>
     <div id="detail-agent"></div>
     <div id="detail-meta" class="muted"></div>
+    <div id="detail-actions" class="row detail-actions"></div>
     <div id="milestone"></div>
     <div id="requests"></div>
     <div id="rating"></div>
@@ -137,6 +146,7 @@
   </section>
 </main>
 
+<div id="usage" class="usage" hidden></div>
 <div id="toast" hidden></div>
 <script type="module" src="/app.js"></script>
 </body>

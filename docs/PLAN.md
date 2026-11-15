@@ -482,6 +482,25 @@ integration; then test run 2 with parallel cards on both machines, driven from t
 - **Exit for each addition:** it solves an observed problem and passes its own operational and
   compatibility checks. None of these features blocks the first release.
 
+**Ideas noted from use (2026-11-14), not started:**
+- **Carry on with another harness or model.** When an agent stops on a plan limit, offer
+  "continue on Codex" (or another model) next to Restart. T3 already switches models and harnesses
+  for a thread and recovers from usage limits (`limitRecovery`); Studio would start the next
+  attempt on the other harness from the stopped attempt's branch (`baseRef`), with a brief that
+  says what was already done, and record the switch in the job's history. The plan meter
+  (`/api/usage`) already tells which harness has room.
+- **A catalog of skills, tools and MCP servers from GitHub.** An index of repositories that publish
+  skills/MCP servers/agents, with what each does and how well it rates, so a Kit can mix and match
+  from it without copying everything locally: Studio keeps only the pointer (repo, path, commit)
+  and fetches a pinned version when a Kit is compiled. Ratings could come from our own job
+  ratings (§10a) plus the source's stars.
+- **Streaming the office (e.g. Twitch), with a host.** A host agent narrates what each agent is
+  working on, reads the stream chat, and decides which viewer ideas are worth passing to the
+  Studio Manager as proposed cards (never straight to an agent, never approving anything itself).
+  Needs a read-only "broadcast" view of the office and a scope for the host like Hermes' (§ MCP).
+- **More looks for the staff:** hairstyles, beards, glasses, hats under the cap, picked from `look`
+  like skin and hair colour are today, so each agent keeps the same face.
+
 ## 12. Open questions
 
 1. Which supported T3 surface permits remote worktree preparation and Kit delivery before launch?
