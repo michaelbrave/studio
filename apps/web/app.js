@@ -783,43 +783,88 @@ const until = (iso) => {
   return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.round(m / 1440)}d`;
 };
 
+let usageRefreshing = false;
 async function loadUsage() {
   try {
     usage = await api("GET", "/api/usage");
   } catch {
-    usage = [];
+    // Keep the last numbers: an old reading, marked with its age, beats an empty meter.
   }
   renderUsage();
 }
 
-/** How much of each plan is left, as T3 reads it: one bar per window (session, weekly...). */
+/** Ask each machine's T3 to re-check its plans now (the hub skips any checked in the last minute). */
+async function refreshUsage() {
+  if (usageRefreshing) return;
+  usageRefreshing = true;
+  renderUsage();
+  try {
+    usage = await api("POST", "/api/usage/refresh");
+  } catch (e) {
+    toast(`Couldn't re-check plan usage: ${e.message}`);
+  } finally {
+    usageRefreshing = false;
+    renderUsage();
+  }
+}
+
+/**
+ * How much of each plan is left, as T3 last read it: one bar per window (session, weekly...).
+ * Readings are approximate between checks (the hub re-checks every 10 minutes, after a reset and
+ * when a job finishes), so each plan shows its age, and a window whose reset time has passed is
+ * shown as full until the next check confirms it.
+ */
 function renderUsage() {
   const el = $("#usage");
   el.hidden = usage.length === 0;
   if (!usage.length) return;
+  const now = Date.now();
   const rows = usage.map((u) => {
+    const windows = u.windows.map((w) => {
+      const reset = w.resetsAt && Date.parse(w.resetsAt) <= now;
+      return { ...w, reset, usedPercent: reset ? 0 : w.usedPercent };
+    });
     // The tightest window is what limits you right now.
-    const tight = u.windows.reduce((x, w) => (w.usedPercent > x.usedPercent ? w : x), u.windows[0]);
+    const tight = windows.reduce((x, w) => (w.usedPercent > x.usedPercent ? w : x), windows[0]);
     const left = (w) => Math.max(0, Math.round(100 - w.usedPercent));
     const level = (w) => (left(w) <= 10 ? "low" : left(w) <= 30 ? "mid" : "ok");
+    const stale = !u.checkedAt || now - Date.parse(u.checkedAt) > 60 * 60_000;
+    const approx = stale || windows.some((w) => w.reset) ? "≈" : "";
     const bar = (w) =>
       h(
         "div",
-        { class: "usage-win", title: `${w.label}: ${Math.round(w.usedPercent)}% used${w.resetsAt ? `, resets in ${until(w.resetsAt)}` : ""}` },
+        {
+          class: "usage-win",
+          title: w.reset
+            ? `${w.label}: reset at ${new Date(w.resetsAt).toLocaleTimeString()}, waiting for the next check to confirm`
+            : `${w.label}: ${Math.round(w.usedPercent)}% used${w.resetsAt ? `, resets in ${until(w.resetsAt)}` : ""}`,
+        },
         h("span", { class: "usage-wlabel" }, w.label),
         h("span", { class: "usage-bar" }, h("i", { class: level(w), style: `width:${left(w)}%` })),
-        h("span", { class: "usage-num" }, `${left(w)}%`),
-        h("span", { class: "muted usage-reset" }, w.resetsAt ? until(w.resetsAt) : ""),
+        h("span", { class: "usage-num" }, `${w.reset ? "≈" : ""}${left(w)}%`),
+        h("span", { class: "muted usage-reset" }, w.reset ? "reset" : w.resetsAt ? until(w.resetsAt) : ""),
       );
     return h(
       "div",
-      { class: "usage-row" },
-      h("div", { class: "usage-head" }, h("span", { class: "dot", style: `background:${u.color}` }), h("strong", {}, u.label), h("span", { class: `usage-left ${level(tight)}` }, `${left(tight)}% left`)),
-      usageOpen ? u.windows.map(bar) : null,
+      { class: `usage-row${stale ? " stale" : ""}` },
+      h(
+        "div",
+        { class: "usage-head" },
+        h("span", { class: "dot", style: `background:${u.color}` }),
+        h("strong", {}, u.label),
+        h("span", { class: "muted usage-age", title: u.checkedAt ? `Last checked ${new Date(u.checkedAt).toLocaleString()} (on ${u.worker})` : "Never checked" }, u.checkedAt ? ago(Date.parse(u.checkedAt)) : "unchecked"),
+        h("span", { class: `usage-left ${level(tight)}` }, `${approx}${left(tight)}% left`),
+      ),
+      usageOpen ? windows.map(bar) : null,
     );
   });
   el.replaceChildren(
-    h("button", { type: "button", class: "usage-toggle ghost", title: usageOpen ? "Smaller" : "Show each window", onclick: () => { usageOpen = !usageOpen; localStorage.setItem("studio.usage.open", usageOpen ? "1" : "0"); renderUsage(); } }, usageOpen ? "–" : "+"),
+    h(
+      "div",
+      { class: "usage-tools" },
+      h("button", { type: "button", class: "ghost", title: "Check usage now", disabled: usageRefreshing, onclick: refreshUsage }, usageRefreshing ? "…" : "↻"),
+      h("button", { type: "button", class: "ghost", title: usageOpen ? "Smaller" : "Show each window", onclick: () => { usageOpen = !usageOpen; localStorage.setItem("studio.usage.open", usageOpen ? "1" : "0"); renderUsage(); } }, usageOpen ? "–" : "+"),
+    ),
     h("div", { class: "usage-title muted small" }, "Plan left"),
     ...rows,
   );
@@ -828,4 +873,5 @@ function renderUsage() {
 await refresh();
 setInterval(refresh, 2000);
 void loadUsage();
-setInterval(loadUsage, 60_000);
+// The hub answers from its last reading, so this is cheap; it also moves the countdowns along.
+setInterval(loadUsage, 30_000);

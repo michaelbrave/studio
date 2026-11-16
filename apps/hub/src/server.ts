@@ -47,6 +47,7 @@ const routes: Record<string, (body: any, match: RegExpMatchArray) => Promise<unk
   "GET /api/attempts/([\\w-]+)": (_, m) => hub.attempt(m[1]!, { seen: true }),
   "POST /api/attempts/([\\w-]+)/restart": (b, m) => hub.restart(m[1]!, b.note || undefined),
   "GET /api/usage": () => hub.usage(),
+  "POST /api/usage/refresh": () => hub.refreshUsage(),
   "POST /api/attempts/([\\w-]+)/cancel": (_, m) => hub.cancel(m[1]!),
   "POST /api/attempts/([\\w-]+)/respond": (b, m) => hub.respond(m[1]!, b.requestId, b.decision),
   "POST /api/attempts/([\\w-]+)/rate": (b, m) => hub.workflow.rate(m[1]!, b.ratings ?? []),

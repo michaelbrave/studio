@@ -86,8 +86,13 @@ export class Hub {
   private readonly briefs: BriefLog;
   /** Machine liveness for notifications, checked every 30 s (the page checks its own on each poll). */
   private liveness: { at: number; workers: Array<{ name: string; online: boolean }> } = { at: 0, workers: [] };
-  /** Plan usage per harness, read from each machine's T3 at most once a minute. */
+  /** Plan usage per harness: the last reading from each machine's T3, never awaited by the page. */
   private usageCache: { at: number; data: UsageReport } | null = null;
+  private usageReading: Promise<UsageReport> | null = null;
+  /** Per machine: when Studio last asked its T3 to re-check usage, and any check in flight. */
+  private readonly usageChecks = new Map<string, { at: number; running: Promise<void> | null }>();
+  /** Finished Attempts already seen, so each newly finished one triggers one usage check. */
+  private finishedSeen: Set<string> | null = null;
 
   constructor(db: DatabaseSync, dirs: { roles: string; kits: string; home?: string }, vault: Vault, notify: NotifyConfig | null = null) {
     this.db = db;
@@ -499,43 +504,123 @@ export class Hub {
     return this.dispatcher.get(a.id);
   }
 
-  /** How much of each harness's plan is used: T3 reads the providers' own limits (session, weekly). */
+  /**
+   * How much of each harness's plan is used, as T3 last read it from the providers (session,
+   * weekly). Answers from the last reading at once; an older one is re-read in the background.
+   * T3 itself only re-checks during turns or when asked, so `checkUsage` asks it (see tick()).
+   */
   async usage(): Promise<UsageReport> {
-    if (this.usageCache && Date.now() - this.usageCache.at < 60_000) return this.usageCache.data;
-    const data = await this.readUsage();
-    this.usageCache = { at: Date.now(), data };
-    return data;
+    if (!this.usageCache) return this.readUsage();
+    if (Date.now() - this.usageCache.at > 30_000) void this.readUsage().catch(() => {});
+    return this.usageCache.data;
   }
 
-  private async readUsage(): Promise<UsageReport> {
+  /**
+   * Ask T3 to re-check plan usage now (the refresh button), then answer with the new reading.
+   * Machines checked in the last minute are skipped; a machine that does not answer keeps its
+   * last reading.
+   */
+  async refreshUsage(): Promise<UsageReport> {
+    await Promise.all([...this.workers.keys()].map((name) => this.checkUsage(name, 60_000)));
+    return this.readUsage();
+  }
+
+  /**
+   * Ask one machine's T3 to re-read its providers' usage (T3 `server.refreshProviders`), at most
+   * once per `minGapMs`. Waits up to a minute; a slower check finishes in the background.
+   */
+  private async checkUsage(worker: string, minGapMs: number): Promise<void> {
+    const state = this.usageChecks.get(worker) ?? { at: 0, running: null };
+    this.usageChecks.set(worker, state);
+    if (state.running) return withTimeout(state.running, 60_000).catch(() => {});
+    if (Date.now() - state.at < minGapMs) return;
+    const rpc = this.workers.get(worker)?.t3?.rpc;
+    if (!rpc) return;
+    state.at = Date.now();
+    state.running = rpc
+      .call("server.refreshProviders", {})
+      .then(
+        () => {},
+        (e: Error) => console.error(`usage check on ${worker} failed: ${e.message}`),
+      )
+      .finally(() => {
+        state.running = null;
+        void this.readUsage().catch(() => {});
+      });
+    return withTimeout(state.running, 60_000).catch(() => {});
+  }
+
+  /**
+   * Keep plan usage roughly current without polling the providers: re-check a machine when its
+   * reading is over 10 minutes old, once after a window's reset time passes, and when an agent
+   * on it finishes a job.
+   */
+  private checkUsageIfDue() {
+    const TEN_MIN = 10 * 60_000;
+    const now = Date.now();
+    const due = new Map<string, number>(); // machine → minimum gap since its last check
+    for (const u of this.usageCache?.data ?? []) {
+      const checked = u.checkedAt ? Date.parse(u.checkedAt) : 0;
+      if (now - checked > TEN_MIN) due.set(u.worker, TEN_MIN);
+      const last = this.usageChecks.get(u.worker)?.at ?? 0;
+      // A reset has passed since the last check: confirm it once.
+      if (u.windows.some((w) => w.resetsAt && Date.parse(w.resetsAt) < now && Date.parse(w.resetsAt) > Math.max(last, checked))) due.set(u.worker, 0);
+    }
+    if (!this.usageCache) void this.readUsage().catch(() => {});
+    const finished = this.db
+      .prepare(`SELECT id, worker FROM attempts WHERE state IN (${[...TERMINAL_STATES].map(() => "?").join(", ")})`)
+      .all(...TERMINAL_STATES) as Array<{ id: string; worker: string }>;
+    if (this.finishedSeen) {
+      for (const a of finished) if (!this.finishedSeen.has(a.id)) due.set(a.worker, Math.min(due.get(a.worker) ?? 60_000, 60_000));
+    }
+    this.finishedSeen = new Set(finished.map((a) => a.id));
+    for (const [worker, gap] of due) void this.checkUsage(worker, gap);
+  }
+
+  /** Read every machine's latest usage from T3 (cheap: T3 answers from its own snapshot). */
+  private readUsage(): Promise<UsageReport> {
+    this.usageReading ??= this.readUsageNow().finally(() => (this.usageReading = null));
+    return this.usageReading;
+  }
+
+  private async readUsageNow(): Promise<UsageReport> {
     type Limits = { checkedAt: string; credentialFingerprint?: string; windows: Array<UsageWindow & { resetsAt?: string }>; unavailable?: { reason: string } };
-    const out: UsageReport = [];
-    const seen = new Set<string>();
-    for (const conn of this.workers.values()) {
-      if (!conn.t3?.rpc) continue;
-      const config = await conn.t3.rpc
-        .call<{ providers?: Array<{ instanceId?: string; providerInstanceId?: string; usageLimits?: Limits }> }>("server.getConfig", {})
-        .catch(() => null);
-      for (const p of config?.providers ?? []) {
+    type Config = { providers?: Array<{ instanceId?: string; providerInstanceId?: string; usageLimits?: Limits }> };
+    const conns = [...this.workers.values()].filter((c) => c.t3?.rpc);
+    const configs = await Promise.all(conns.map((c) => withTimeout(c.t3!.rpc!.call<Config>("server.getConfig", {}), 15_000).catch(() => null)));
+    // A machine that did not answer keeps its last reading rather than vanishing from the meter.
+    const previous = this.usageCache?.data ?? [];
+    const byPlan = new Map<string, UsageReport[number]>();
+    conns.forEach((conn, i) => {
+      const config = configs[i];
+      if (!config) {
+        for (const u of previous.filter((p) => p.worker === conn.name)) byPlan.set(`${u.harness}|${u.plan}`, u);
+        return;
+      }
+      for (const p of config.providers ?? []) {
         const id = p.instanceId ?? p.providerInstanceId;
         const harness = (Object.keys(INSTANCE) as Provider[]).find((k) => INSTANCE[k] === id);
         const limits = p.usageLimits;
         if (!harness || !limits || limits.unavailable || !limits.windows.length) continue;
-        // The same account signed in on two machines is one plan; show it once.
-        const key = `${harness}|${limits.credentialFingerprint ?? conn.name}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({
+        // The same account signed in on two machines is one plan: show the newer reading.
+        const plan = limits.credentialFingerprint ?? conn.name;
+        const key = `${harness}|${plan}`;
+        const other = byPlan.get(key);
+        if (other && Date.parse(other.checkedAt ?? "") >= Date.parse(limits.checkedAt)) continue;
+        byPlan.set(key, {
           harness,
           label: HARNESSES[harness].label,
           color: HARNESSES[harness].color,
           worker: conn.name,
+          plan,
           windows: limits.windows.map((w) => ({ label: w.label, kind: w.kind, usedPercent: w.usedPercent, resetsAt: w.resetsAt ?? null })),
           checkedAt: limits.checkedAt,
         });
       }
-    }
-    return out;
+    });
+    const data = [...byPlan.values()].sort((a, b) => a.label.localeCompare(b.label));
+    this.usageCache = { at: Date.now(), data };
+    return data;
   }
 
   private async getStaff(name: string) {
@@ -657,6 +742,7 @@ export class Hub {
     await this.startCrossChecks();
     await this.workflow.tick();
     await this.readActivity();
+    this.checkUsageIfDue();
     await this.notify();
   }
 
@@ -909,9 +995,21 @@ export type UsageReport = Array<{
   color: string;
   /** The machine it was read on. */
   worker: string;
+  /** Which account: T3's opaque credential fingerprint, or the machine when it gives none. */
+  plan: string;
   windows: UsageWindow[];
+  /** When the provider was last asked (T3 probe or a mid-turn update). */
   checkedAt: string | null;
 }>;
+
+/** Reject when `promise` takes longer than `ms`; the work itself carries on. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer after ${ms / 1000}s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 interface RuntimeRequest {
   id: string;
