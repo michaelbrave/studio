@@ -266,6 +266,9 @@ source, so `studio service restart` picks up changes.
 
 ## Credits
 
+See [Ideas, decisions, and attribution](docs/IDEAS.md) for the origins of Studio's
+features, the reasoning behind decisions, and the ongoing record of influences and contributions.
+
 Built on [T3 Code](https://github.com/pingdotgg/t3code) (MIT). 3D office:
 [three.js](https://threejs.org) (MIT, vendored). Furniture and characters:
 [Kenney](https://kenney.nl) (CC0). Inspired by *Game Dev Tycoon*. Studio borrows its feel, not
